@@ -1,0 +1,4 @@
+aiohttp==3.6.2
+gidgethub==4.1.0
+requests==2.23.0
+jwt==1.5.3
