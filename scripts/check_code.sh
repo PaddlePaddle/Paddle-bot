@@ -32,7 +32,7 @@ function prepare_env(){
 }
 
 function abort(){
-    echo "Your change doesn't follow benchmark's code style." 1>&2
+    echo "Your change doesn't follow python's code style." 1>&2
     echo "Please use pre-commit to check what is wrong." 1>&2
     exit 1
 }
@@ -42,7 +42,7 @@ function check_style(){
 	trap 'abort' 0
 	pre-commit install
 	commit_files=on
-        for file_name in `git diff --name-only HEAD~ HEAD`;do
+	for file_name in `git diff --name-only HEAD~ HEAD`;do
 	        if  ! pre-commit run --files $file_name ; then
             		git diff
             		commit_files=off
@@ -58,7 +58,7 @@ function check_style(){
 function main(){
     local CMD=$1
     case $CMD in
-      run_api_test)
+      check_code_style)
         prepare_tf_env
         check_style
         ;;

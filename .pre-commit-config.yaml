@@ -3,4 +3,11 @@ repos:
     sha: 0d79c0c469bab64f7229c9aca2b1186ef47f0e37
     hooks:
     -   id: yapf
-        files: .py$
+        files: .(py)$
+-   repo: local
+    hooks:
+    -   id: shell_check
+        name: shell
+        description: Check shell code style using 'sh -n'.
+        entry: bash ./scripts/codestyle/shell_pre_commit.hook
+        language: system
