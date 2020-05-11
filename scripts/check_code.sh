@@ -24,8 +24,8 @@ if [ -z ${BRANCH} ]; then
     BRANCH="master"
 fi
 
-BENCHMARK_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/.." && pwd )"
-echo ${BENCHMARK_ROOT}
+PADDLEBOT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/.." && pwd )"
+echo ${PADDLEBOT_ROOT}
 
 function prepare_env(){
     pip install pre-commit==1.21 pylint==1.9.5
@@ -59,7 +59,7 @@ function main(){
     local CMD=$1
     case $CMD in
       check_code_style)
-        prepare_tf_env
+        prepare_env
         check_style
         ;;
 	*)
