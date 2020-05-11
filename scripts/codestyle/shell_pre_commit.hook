@@ -1,0 +1,11 @@
+#!/bin/bash
+TOTAL_ERRORS=0
+BENCHMARK_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/.." && pwd )"
+echo ${BENCHMARK_ROOT}
+for file_name in `git diff --name-only HEAD~ HEAD`;do
+        if [[ "${file_name##*.}"x = "sh"x ]];then
+		bash -n $file_name
+		TOTAL_ERRORS=$(expr $TOTAL_ERRORS + $?)
+	fi
+done
+exit $TOTAL_ERRORS
