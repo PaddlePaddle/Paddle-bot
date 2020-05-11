@@ -27,10 +27,8 @@ fi
 BENCHMARK_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/.." && pwd )"
 echo ${BENCHMARK_ROOT}
 
-function prepare_tf_env(){
+function prepare_env(){
     pip install pre-commit==1.21 pylint==1.9.5
-    #apt-get update
-    #apt-get install -y git
 }
 
 function abort(){
@@ -44,8 +42,7 @@ function check_style(){
 	trap 'abort' 0
 	pre-commit install
 	commit_files=on
-    	for file_name in `git diff --numstat | awk '{print $NF}'`;do
-        #for file_name in `git diff --name-only HEAD~ HEAD`;do
+        for file_name in `git diff --name-only HEAD~ HEAD`;do
 	        if  ! pre-commit run --files $file_name ; then
             		git diff
             		commit_files=off
