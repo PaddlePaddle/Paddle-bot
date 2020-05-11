@@ -1,0 +1,4 @@
+language: python
+sudo: required
+script:
+  - bash scripts/check_code.sh run_api_test
