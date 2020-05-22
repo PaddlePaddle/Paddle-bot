@@ -36,10 +36,6 @@ async def main(request):
             await router.dispatch(event, gh, repo)
     return web.Response(status=200)
 
-@routes.get("/")
-async def main(request):
-    return web.Response(status=200, text="Hello world!")
-
 if __name__ == "__main__":
     app = web.Application()
     app.add_routes(routes)

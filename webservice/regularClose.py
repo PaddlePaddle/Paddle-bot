@@ -28,6 +28,7 @@ def getNextUrl(link):
 async def overdueList(types, url, gh):
     today = datetime.date.today()
     lastYear = str(today - datetime.timedelta(days=365))
+    print(lastYear)
     overduelist = []
     while (url != None):
         (code, header, body) = await gh._request("GET", url, {'accept': 'application/vnd.github.antiope-preview+json'})
@@ -35,11 +36,14 @@ async def overdueList(types, url, gh):
         for item in res:
             if types == 'issues' and 'pull_request' not in item:
                 if item['updated_at'] < lastYear: #if updateTime earlier than lastYear
+                    user = item['user']['login']
                     comments_url = item['comments_url']
-                    (code_co, header_co, body_co) = await gh._request("GET", comments_url, None)
+                    (code_co, header_co, body_co) = await gh._request("GET", comments_url, {'accept': 'application/vnd.github.antiope-preview+json'})
                     comments = json.loads(body_co.decode('utf8'))
-                    if len(comments) == 0:
-                        overduelist.append(item['number'])
+                    if len(comments) != 0:
+                        last_comment_user = comments[len(comments)-1]['user']['login']
+                        if last_comment_user != user:
+                            overduelist.append(item['number'])
             elif types == 'pr':
                 if item['updated_at'] < lastYear: #if updateTime earlier than lastYear
                     overduelist.append(item['number'])
@@ -54,6 +58,7 @@ async def close(types, itemList, gh, user, repo):
         event = 'issues'
     data = {"state": "closed"}
     d = json.dumps(data)
+    logger.info("close %s count is %s: %s" % (types, len(itemList), itemList))
     if len(itemList) != 0:
         for i in itemList:
             url = "https://api.github.com/repos/%s/%s/%s/%s" % (user, repo, event, i)

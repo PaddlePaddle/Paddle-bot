@@ -15,6 +15,7 @@ async def create_check_run(sha, gh, repo):
     url = 'https://api.github.com/repos/%s/check-runs' % repo
     await gh.post(url, data=data, accept='application/vnd.github.antiope-preview+json')
 
+
 @router.register("pull_request", action="opened")
 async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     """Check if PR triggers CI"""
@@ -22,7 +23,7 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     url = event.data["pull_request"]["comments_url"]
     commit_url = event.data["pull_request"]["commits_url"]
     sha = event.data["pull_request"]["head"]["sha"]
-    if repo != 'PaddlePaddle/Paddle' or repo != 'PaddlePaddle/benchmark':
+    if repo not in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark', 'lelelelelez/leetcode']:
         repo = 'Others'
     CHECK_CI = localConfig.cf.get(repo, 'CHECK_CI')
     if checkPRCI(commit_url, sha, CHECK_CI) == False:
@@ -46,17 +47,17 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
         repo = 'Others'
     CHECK_TEMPLATE = localConfig.cf.get(repo, 'CHECK_TEMPLATE')
     global check_pr_template
-    if repo == 'lelelelelez/leetcode':
+    if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
         CHECK_TEMPLATE_doc = localConfig.cf.get(repo, 'CHECK_TEMPLATE_doc')
-        check_pr_template = checkPRTemplate(BODY, CHECK_TEMPLATE, CHECK_TEMPLATE_doc)
+        check_pr_template = checkPRTemplate(repo, BODY, CHECK_TEMPLATE, CHECK_TEMPLATE_doc)
     else:
-        check_pr_template = checkPRTemplate(BODY, CHECK_TEMPLATE)
+        check_pr_template = checkPRTemplate(repo, BODY, CHECK_TEMPLATE)
     if check_pr_template == False:
         message = localConfig.cf.get(repo, 'NOT_USING_TEMPLATE')
         logger.error("%s Not Follow Template." % pr_num)
-        if event['action'] == "opened":
+        if event.data['action'] == "opened":
             await gh.post(url, data={"body": message})
-            
+
 @router.register("check_run", action="created")
 async def running_check_run(event, gh, repo, *args, **kwargs):
     """running checkrun"""
@@ -64,7 +65,8 @@ async def running_check_run(event, gh, repo, *args, **kwargs):
     name = event.data["check_run"]["name"]
     data = {"name": name, "status": "in_progress"}
     await gh.patch(url, data=data, accept='application/vnd.github.antiope-preview+json')
-    #time.sleep(5)
+    if repo not in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark', 'lelelelelez/leetcode']:
+        repo = 'Others'
     if check_pr_template == False:
         data = {"name": name, "status": "completed", "conclusion": "failure", "output": {"title": "checkTemplateFailed", "summary": localConfig.cf.get(repo, 'NOT_USING_TEMPLATE')}}
     else:
@@ -76,19 +78,19 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     """check_close_regularly"""
     url = event.data["pull_request"]["comments_url"]
     sender = event.data["sender"]["login"]
-    if repo != 'PaddlePaddle/Paddle' or repo != 'PaddlePaddle/benchmark':
+    if repo not in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark', 'lelelelelez/leetcode']:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
         message = localConfig.cf.get(repo, 'CLOSE_REGULAR')
-    await gh.post(url, data={"body": message})
+        await gh.post(url, data={"body": message})
 
 @router.register("issues", action="closed")
 async def check_close_regularly(event, gh, repo, *args, **kwargs):
     """check_close_regularly"""
     url = event.data["issue"]["comments_url"]
     sender = event.data["sender"]["login"]
-    if repo != 'PaddlePaddle/Paddle' or repo != 'PaddlePaddle/benchmark':
+    if repo not in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark', 'lelelelelez/leetcode']:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
         message = localConfig.cf.get(repo, 'CLOSE_REGULAR')
-    await gh.post(url, data={"body": message})
+        await gh.post(url, data={"body": message})
