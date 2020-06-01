@@ -8,8 +8,12 @@ import gidgethub
 from gidgethub import aiohttp as gh_aiohttp
 from utils.auth import get_jwt, get_installation, get_installation_access_token
 
-logging.basicConfig(level=logging.INFO, filename='./logs/regularClose.log', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    filename='./logs/regularClose.log',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 
 def getNextUrl(link):
     next_str = None
@@ -20,10 +24,11 @@ def getNextUrl(link):
     if next_str != None:
         start_index = next_str.index('<')
         end_index = next_str.index('>')
-        url = next_str[start_index+1:end_index]
+        url = next_str[start_index + 1:end_index]
     else:
         url = None
     return url
+
 
 async def overdueList(types, url, gh):
     today = datetime.date.today()
@@ -31,21 +36,28 @@ async def overdueList(types, url, gh):
     print(lastYear)
     overduelist = []
     while (url != None):
-        (code, header, body) = await gh._request("GET", url, {'accept': 'application/vnd.github.antiope-preview+json'})
+        (code, header, body) = await gh._request(
+            "GET", url,
+            {'accept': 'application/vnd.github.antiope-preview+json'})
         res = json.loads(body.decode('utf8'))
         for item in res:
             if types == 'issues' and 'pull_request' not in item:
-                if item['updated_at'] < lastYear: #if updateTime earlier than lastYear
+                if item['updated_at'] < lastYear:  #if updateTime earlier than lastYear
                     user = item['user']['login']
                     comments_url = item['comments_url']
-                    (code_co, header_co, body_co) = await gh._request("GET", comments_url, {'accept': 'application/vnd.github.antiope-preview+json'})
+                    (code_co, header_co,
+                     body_co) = await gh._request("GET", comments_url, {
+                         'accept':
+                         'application/vnd.github.antiope-preview+json'
+                     })
                     comments = json.loads(body_co.decode('utf8'))
                     if len(comments) != 0:
-                        last_comment_user = comments[len(comments)-1]['user']['login']
+                        last_comment_user = comments[len(comments) - 1][
+                            'user']['login']
                         if last_comment_user != user:
                             overduelist.append(item['number'])
             elif types == 'pr':
-                if item['updated_at'] < lastYear: #if updateTime earlier than lastYear
+                if item['updated_at'] < lastYear:  #if updateTime earlier than lastYear
                     overduelist.append(item['number'])
         url = getNextUrl(header['link'])
     return overduelist
@@ -61,14 +73,16 @@ async def close(types, itemList, gh, user, repo):
     logger.info("close %s count is %s: %s" % (types, len(itemList), itemList))
     if len(itemList) != 0:
         for i in itemList:
-            url = "https://api.github.com/repos/%s/%s/%s/%s" % (user, repo, event, i)
+            url = "https://api.github.com/repos/%s/%s/%s/%s" % (user, repo,
+                                                                event, i)
             try:
                 await gh.patch(url, data=data)
                 logger.info("%s_id: %s closed success!" % (event, i))
             except gidgethub.BadRequest:
-                logger.error("%s_id: %s closed failed!"  % (event, i))
+                logger.error("%s_id: %s closed failed!" % (event, i))
     else:
-        logger.info("%s is empty!" %item)
+        logger.info("%s is empty!" % item)
+
 
 async def main(user, repo):
     async with aiohttp.ClientSession() as session:
@@ -81,17 +95,19 @@ async def main(user, repo):
             print(ve)
         else:
             access_token = await get_installation_access_token(
-                gh, jwt=jwt, installation_id=installation["id"]
-            )
+                gh, jwt=jwt, installation_id=installation["id"])
             # treat access_token as if a personal access token
-            gh = gh_aiohttp.GitHubAPI(session, user,
-                        oauth_token=access_token["token"])
-            pr_url = 'https://api.github.com/repos/%s/%s/pulls?per_page=100&page=1&direction=asc&q=addClass' %(user, repo)
-            issues_url = 'https://api.github.com/repos/%s/%s/issues?per_page=100&page=1&direction=asc&q=addClass' %(user, repo)
+            gh = gh_aiohttp.GitHubAPI(
+                session, user, oauth_token=access_token["token"])
+            pr_url = 'https://api.github.com/repos/%s/%s/pulls?per_page=100&page=1&direction=asc&q=addClass' % (
+                user, repo)
+            issues_url = 'https://api.github.com/repos/%s/%s/issues?per_page=100&page=1&direction=asc&q=addClass' % (
+                user, repo)
             PRList = await overdueList('pr', pr_url, gh)
             issueList = await overdueList('issues', issues_url, gh)
             await close('pr', PRList, gh, user, repo)
             await close('issue', issueList, gh, user, repo)
+
 
 loop = asyncio.get_event_loop()
 loop.run_until_complete(main('PaddlePaddle', 'Paddle'))
