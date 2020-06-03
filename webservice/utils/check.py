@@ -28,7 +28,38 @@ def re_rule(body, CHECK_TEMPLATE):
     return result
 
 
-def checkPRTemplate(repo, body, CHECK_TEMPLATE, CHECK_TEMPLATE_doc=None):
+def parameter_accuracy(body):
+    PR_dic = {}
+    PR_types = [
+        'New features', 'Bug fixes', 'Function optimization',
+        'Performance optimization', 'Breaking changes', 'Others'
+    ]
+    PR_changes = ['OPs', 'APIs', 'Docs', 'Others']
+    body = re.sub("\r\n", "", body)
+    type_end = body.find('### PR changes')
+    changes_end = body.find('### Describe')
+    PR_dic['PR types'] = body[len('### PR types'):type_end]
+    PR_dic['PR changes'] = body[type_end + 14:changes_end]
+    message = ''
+    for key in PR_dic:
+        test_list = PR_types if key == 'PR types' else PR_changes
+        value = PR_dic[key].strip().split(',')
+        single_mess = ''
+        if len(value) == 1 and value[0] == '':
+            message += '%s should be one of %s. but now is None.' % (key,
+                                                                     test_list)
+        else:
+            for i in value:
+                i = i.strip()
+                if i not in test_list:
+                    single_mess += '%s.' % i
+            if len(single_mess) != 0:
+                message += '%s should be one of %s. but now is [%s].' % (
+                    key, test_list, single_mess)
+    return message
+
+
+def checkPRTemplate(repo, body, CHECK_TEMPLATE):
     """
     Check if PR's description meet the standard of template
     Args:
@@ -38,37 +69,20 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE, CHECK_TEMPLATE_doc=None):
         res: True or False
     """
     res = False
-    if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
-        note = '\*\*|<!-- ADD SCREENSHOT HERE IF APPLICABLE. -->|<!-- DESCRIBE THE BUG OR REQUIREMENT HERE. eg. #2020（格式为 #Issue编号）-->|-----------------------'
-        body = re.sub(note, "", body)
-        if CHECK_TEMPLATE_doc != None:
-            doc_check = "- PR changes（改动点）is \(\s*[A-D]*[C][A-D]*\s*\):"
-            match_doc = re.search(doc_check, body, re.M | re.I)
-            if match_doc != None:  #choose doc changes
-                others = "- Please write down other information you want to tell reviewers.(.*[^\s].*)"
-                if re_rule(body, others) == None:
-                    body = re.sub(
-                        '- Please write down other information you want to tell reviewers.',
-                        "", body)
-                    CHECK_TEMPLATE_doc = "#### Required（必填, multiple choices, two at most）\r\n- PR type（PR 类型） is \(\s*[A-F]+\s*\):(.*?)- PR changes（改动点）is \(\s*[A-D]*[C][A-D]*\s*\):(.*?)- Use one sentence to describe what this PR does.（简述本次PR的目的和改动）(.*[^\s].*)#### Optional（选填, If None, please delete it）(.*?)- If you modified docs, please make sure that both Chinese and English docs were modified and provide a preview screenshot. （文档必填）(.*[^\s].*)"
-                result_doc = re_rule(body, CHECK_TEMPLATE_doc)
-                if result_doc != None:
-                    res = Trues
-                return res
-
-        option_check = "#### Optional（选填, If None, please delete it）"
-        match_option = re.search(option_check, body, re.M | re.I)
-        if match_option == None:
-            CHECK_TEMPLATE = "#### Required（必填, multiple choices, two at most）\r\n- PR type（PR 类型） is \(\s*[A-F]+\s*\):(.*?)- PR changes（改动点）is \(\s*[A-D]+\s*\):(.*?)- Use one sentence to describe what this PR does.（简述本次PR的目的和改动）(.*[^\s].*)"
-        result = re_rule(body, CHECK_TEMPLATE)
-        if len(CHECK_TEMPLATE) == 0 and len(body) == 0:
-            res = False
-        elif result != None:
+    note = r'<!-- Demo: https://github.com/PaddlePaddle/Paddle/pull/24810 -->\r\n|<!-- One of \[ New features \| Bug fixes \| Function optimization \| Performance optimization \| Breaking changes \| Others \] -->|<!-- One of\t\[ OPs \| APIs \| Docs \| Others \] -->|<!-- Describe what this PR does -->'
+    body = re.sub(note, "", body)
+    result = re_rule(body, CHECK_TEMPLATE)
+    message = ''
+    if len(CHECK_TEMPLATE) == 0 and len(body) == 0:
+        res = False
+    elif result != None:
+        if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
+            message = parameter_accuracy(body)
+            res = True if message == '' else False
+        else:
             res = True
-    else:
-        result = re_rule(body, CHECK_TEMPLATE)
-        if len(CHECK_TEMPLATE) == 0 and len(body) == 0:
-            res = False
-        elif result != None:
-            res = True
-    return res
+    elif result == None:
+        res = False
+        if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
+            message = parameter_accuracy(body)
+    return res, message
