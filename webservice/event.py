@@ -59,12 +59,9 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
         repo = 'Others'
     CHECK_TEMPLATE = localConfig.cf.get(repo, 'CHECK_TEMPLATE')
     global check_pr_template
-    if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
-        CHECK_TEMPLATE_doc = localConfig.cf.get(repo, 'CHECK_TEMPLATE_doc')
-        check_pr_template = checkPRTemplate(repo, BODY, CHECK_TEMPLATE,
-                                            CHECK_TEMPLATE_doc)
-    else:
-        check_pr_template = checkPRTemplate(repo, BODY, CHECK_TEMPLATE)
+    global check_pr_template_message
+    check_pr_template, check_pr_template_message = checkPRTemplate(
+        repo, BODY, CHECK_TEMPLATE)
     if check_pr_template == False:
         message = localConfig.cf.get(repo, 'NOT_USING_TEMPLATE')
         logger.error("%s Not Follow Template." % pr_num)
@@ -86,13 +83,15 @@ async def running_check_run(event, gh, repo, *args, **kwargs):
     ]:
         repo = 'Others'
     if check_pr_template == False:
+        error_message = check_pr_template_message if check_pr_template_message != '' else localConfig.cf.get(
+            repo, 'NOT_USING_TEMPLATE')
         data = {
             "name": name,
             "status": "completed",
             "conclusion": "failure",
             "output": {
                 "title": "checkTemplateFailed",
-                "summary": localConfig.cf.get(repo, 'NOT_USING_TEMPLATE')
+                "summary": error_message
             }
         }
     else:
