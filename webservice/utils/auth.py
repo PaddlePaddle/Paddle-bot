@@ -48,9 +48,9 @@ async def Github_APP_Auth():
     async with aiohttp.ClientSession() as session:
         app_id = os.getenv("GH_APP_ID")
         jwt = get_jwt(app_id)
-        gh = gh_aiohttp.GitHubAPI(session, "lelelelelez")
+        gh = gh_aiohttp.GitHubAPI(session, "randytli")
         try:
-            installation = await get_installation(gh, jwt, "lelelelelez")
+            installation = await get_installation(gh, jwt, "randytli")
         except ValueError as ve:
             print(ve)
         else:
@@ -58,5 +58,5 @@ async def Github_APP_Auth():
                 gh, jwt=jwt, installation_id=installation["id"])
             # treat access_token as if a personal access token
             gh = gh_aiohttp.GitHubAPI(
-                session, "lelelelelez", oauth_token=access_token["token"])
+                session, "randytli", oauth_token=access_token["token"])
         return gh
