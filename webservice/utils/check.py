@@ -23,23 +23,18 @@ def checkPRCI(commit_url, sha, CHECK_CI):
 
 
 def checkCIStatus(combined_statuses_url):
-    response = requests.get(combined_statuses_url, headers=h).json()
-    if response['state'] == "pending":
-        # This commit does not finish any CI yet. Please wait a second!
-        res = 0
-    elif response['state'] == "success":
+    res = False
+    response = requests.get(combined_statuses_url).json()
+    if response['state'] == "success":
         # This commit passed all CI!
-        res = 1
-    else:
-        # This commit contains failed CI
-        res = 2
+        res = True
     return res
 
 
 def checkCIDetail(combined_statuses_url, short_sha, res):
     response = requests.get(combined_statuses_url, headers=h).json()
     message = ''
-    if res == 2:
+    if not res:
         failed_ci_number = 0
         message += "This commit: %s contains failed CI." % str(short_sha) + "\r\n"
         for i in range(0, len(response['statuses'])):
@@ -50,8 +45,6 @@ def checkCIDetail(combined_statuses_url, short_sha, res):
                 message += "\r\nFailed CI Link: " + failed_ci_link + "\r\nFailed CI Name: " + failed_ci_name
         message += "\r\n\r\nTotal Failed CI Number:" + str(failed_ci_number)
     return message
-
-
 
 
 def re_rule(body, CHECK_TEMPLATE):
