@@ -31,7 +31,7 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     sha = event.data["pull_request"]["head"]["sha"]
     if repo not in [
         'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'randytli/tablut'
+        'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     CHECK_CI = localConfig.cf.get(repo, 'CHECK_CI')
@@ -54,7 +54,7 @@ async def pull_request_ci_status(event, gh, repo, *args, **kwargs):
     short_sha = sha[0:7]
     if repo not in [
         'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'randytli/tablut'
+        'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     if checkCIStatus(combined_statuses_url) == 0:
@@ -82,7 +82,7 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
     await create_check_run(sha, gh, repo)
     if repo not in [
         'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'randytli/tablut'
+        'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     CHECK_TEMPLATE = localConfig.cf.get(repo, 'CHECK_TEMPLATE')
@@ -107,7 +107,7 @@ async def running_check_run(event, gh, repo, *args, **kwargs):
         url, data=data, accept='application/vnd.github.antiope-preview+json')
     if repo not in [
         'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'randytli/tablut'
+        'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     if check_pr_template == False:
@@ -144,7 +144,7 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     sender = event.data["sender"]["login"]
     if repo not in [
         'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'randytli/tablut'
+        'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
@@ -159,7 +159,7 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     sender = event.data["sender"]["login"]
     if repo not in [
         'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'randytli/tablut'
+        'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':

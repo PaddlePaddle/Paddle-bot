@@ -32,7 +32,7 @@ def checkCIStatus(combined_statuses_url):
 
 
 def checkCIDetail(combined_statuses_url, short_sha, res):
-    response = requests.get(combined_statuses_url, headers=h).json()
+    response = requests.get(combined_statuses_url).json()
     message = ''
     if not res:
         failed_ci_number = 0
