@@ -22,8 +22,8 @@ def checkPRCI(commit_url, sha, CHECK_CI):
     return res
 
 
-def checkCIStatus(commit_combined_ci_status):
-    response = requests.get(commit_combined_ci_status).json()
+def checkCIStatus(combined_statuses_url):
+    response = requests.get(combined_statuses_url, headers=h).json()
     if response['state'] == "pending":
         # This commit does not finish any CI yet. Please wait a second!
         res = 0
@@ -36,8 +36,8 @@ def checkCIStatus(commit_combined_ci_status):
     return res
 
 
-def checkCIDetail(commit_combined_ci_status, short_sha, res):
-    response = requests.get(commit_combined_ci_status).json()
+def checkCIDetail(combined_statuses_url, short_sha, res):
+    response = requests.get(combined_statuses_url, headers=h).json()
     message = ''
     if res == 2:
         failed_ci_number = 0
@@ -46,8 +46,9 @@ def checkCIDetail(commit_combined_ci_status, short_sha, res):
             if 'failure' in response['statuses'][i]["state"]:
                 failed_ci_number += 1
                 failed_ci_name = response['statuses'][i]['context']
-                message += "Failed CI: " + failed_ci_name + "\r\n"
-        message += "Total Failed CI Number:" + str(failed_ci_number)
+                failed_ci_link = response['statuses'][i]['target_url']
+                message += "\r\nFailed CI Link: " + failed_ci_link + "\r\nFailed CI Name: " + failed_ci_name
+        message += "\r\n\r\nTotal Failed CI Number:" + str(failed_ci_number)
     return message
 
 

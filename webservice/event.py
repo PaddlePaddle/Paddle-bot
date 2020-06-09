@@ -3,6 +3,7 @@ from utils.check import checkPRCI, checkPRTemplate
 from utils.readConfig import ReadConfig
 import time
 import logging
+
 router = routing.Router()
 localConfig = ReadConfig()
 
@@ -29,8 +30,8 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     commit_url = event.data["pull_request"]["commits_url"]
     sha = event.data["pull_request"]["head"]["sha"]
     if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'randytli/tablut'
+        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+        'randytli/tablut'
     ]:
         repo = 'Others'
     CHECK_CI = localConfig.cf.get(repo, 'CHECK_CI')
@@ -43,34 +44,30 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     await gh.post(url, data={"body": message})
 
 
-@router.register("pull_request", action="synchronize")
-@router.register("pull_request", action="edited")
-@router.register("pull_request", action="opened")
-@router.register("pull_request", action="review-requested")
+@router.register("status")
 async def pull_request_ci_status(event, gh, repo, *args, **kwargs):
-    """Check CI status"""
-    pr_num = event.data['number']
-    comment_url = event.data["pull_request"]["comments_url"]
-    statuses_url = event.data["pull_request"]["statuses_url"]
-    commit_combined_ci_status = statuses_url.replace('/statuses', '/commits') + "/status"
-    sha = event.data["pull_request"]["head"]["sha"]
+    """Check CI status, then post it"""
+    comment_url = event.data["commit"]["comments_url"]
+    commit_url = event.data["commit"]["url"]
+    combined_statuses_url = commit_url + "/status"
+    sha = event.data["sha"]
     short_sha = sha[0:7]
     if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'randytli/tablut'
+        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+        'randytli/tablut'
     ]:
         repo = 'Others'
-    if checkCIStatus(commit_combined_ci_status) == 0:
+    if checkCIStatus(combined_statuses_url) == 0:
         message = localConfig.cf.get(repo, 'STATUS_CI_PENDING')
-        logger.info("%s Still Pending" % pr_num)
-    elif checkCIStatus(commit_combined_ci_status) == 1:
+        logger.info("%s Still Pending" % short_sha)
+    elif checkCIStatus(combined_statuses_url) == 1:
         message = localConfig.cf.get(repo, 'STATUS_CI_SUCCESS')
-        logger.info("%s Passed All CI. " % pr_num)
+        logger.info("%s Passed All CI. " % short_sha)
     else:
-        error_message = checkCIDetail(
-            commit_combined_ci_status, short_sha, checkCIStatus(commit_combined_ci_status))
+        ci_failure = checkCIStatus(combined_statuses_url)
+        error_message = checkCIDetail(commit_combined_ci_status, short_sha, ci_failure)
         message = localConfig.cf.get(repo, error_message)
-        logger.error("%s Contains Failed CI" % pr_num)
+        logger.error("%s Contains Failed CI" % short_sha)
     await gh.post(comment_url, data={"body": message})
 
 
@@ -84,8 +81,8 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
     sha = event.data["pull_request"]["head"]["sha"]
     await create_check_run(sha, gh, repo)
     if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'randytli/tablut'
+        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+        'randytli/tablut'
     ]:
         repo = 'Others'
     CHECK_TEMPLATE = localConfig.cf.get(repo, 'CHECK_TEMPLATE')
@@ -109,8 +106,8 @@ async def running_check_run(event, gh, repo, *args, **kwargs):
     await gh.patch(
         url, data=data, accept='application/vnd.github.antiope-preview+json')
     if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'randytli/tablut'
+        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+        'randytli/tablut'
     ]:
         repo = 'Others'
     if check_pr_template == False:
@@ -133,7 +130,7 @@ async def running_check_run(event, gh, repo, *args, **kwargs):
             "output": {
                 "title": "checkTemplateSuccess",
                 "summary":
-                "✅ This PR's description meets the template requirements!"
+                    "✅ This PR's description meets the template requirements!"
             }
         }
     await gh.patch(
@@ -146,8 +143,8 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     url = event.data["pull_request"]["comments_url"]
     sender = event.data["sender"]["login"]
     if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'randytli/tablut'
+        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+        'randytli/tablut'
     ]:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
@@ -161,8 +158,8 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     url = event.data["issue"]["comments_url"]
     sender = event.data["sender"]["login"]
     if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'randytli/tablut'
+        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+        'randytli/tablut'
     ]:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
