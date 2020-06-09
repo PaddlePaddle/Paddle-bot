@@ -33,7 +33,7 @@ def getNextUrl(link):
 async def overdueList(types, url, gh):
     today = datetime.date.today()
     lastYear = str(today - datetime.timedelta(days=365))
-    print(lastYear)
+    logger.info("Close %s before %s" % (types, lastYear))
     overduelist = []
     while (url != None):
         (code, header, body) = await gh._request(
@@ -104,10 +104,15 @@ async def main(user, repo):
             issues_url = 'https://api.github.com/repos/%s/%s/issues?per_page=100&page=1&direction=asc&q=addClass' % (
                 user, repo)
             PRList = await overdueList('pr', pr_url, gh)
+            logger.info("PRList: %s" % PRList)
             issueList = await overdueList('issues', issues_url, gh)
+            logger.info("issueList: %s" % issueList)
             await close('pr', PRList, gh, user, repo)
             await close('issue', issueList, gh, user, repo)
 
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(main('PaddlePaddle', 'Paddle'))
+def regularClose_job():
+    new_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(new_loop)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main('PaddlePaddle', 'Paddle'))
