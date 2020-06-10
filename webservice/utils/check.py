@@ -22,31 +22,6 @@ def checkPRCI(commit_url, sha, CHECK_CI):
     return res
 
 
-def checkCIStatus(combined_statuses_url):
-    res = False
-    response = requests.get(combined_statuses_url).json()
-    if response['state'] == "success":
-        # This commit passed all CI!
-        res = True
-    return res
-
-
-def checkCIDetail(combined_statuses_url, short_sha, res):
-    response = requests.get(combined_statuses_url).json()
-    message = ''
-    if not res:
-        failed_ci_number = 0
-        message += "This commit: %s contains failed CI." % str(short_sha) + "\r\n"
-        for i in range(0, len(response['statuses'])):
-            if 'failure' in response['statuses'][i]["state"]:
-                failed_ci_number += 1
-                failed_ci_name = response['statuses'][i]['context']
-                failed_ci_link = response['statuses'][i]['target_url']
-                message += "\r\nFailed CI Link: " + failed_ci_link + "\r\nFailed CI Name: " + failed_ci_name
-        message += "\r\n\r\nTotal Failed CI Number:" + str(failed_ci_number)
-    return message
-
-
 def re_rule(body, CHECK_TEMPLATE):
     PR_RE = re.compile(CHECK_TEMPLATE, re.DOTALL)
     result = PR_RE.search(body)
@@ -101,13 +76,13 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
     if len(CHECK_TEMPLATE) == 0 and len(body) == 0:
         res = False
     elif result != None:
-        if repo in ['randytli/tablut', 'PaddlePaddle/Paddle']:
+        if repo in ['lelelelelez/leetcode', 'randytli/tablut', 'PaddlePaddle/Paddle']:
             message = parameter_accuracy(body)
             res = True if message == '' else False
         else:
             res = True
     elif result == None:
         res = False
-        if repo in ['randytli/tablut', 'PaddlePaddle/Paddle']:
+        if repo in ['lelelelelez/leetcode', 'randytli/tablut', 'PaddlePaddle/Paddle']:
             message = parameter_accuracy(body)
     return res, message

@@ -48,24 +48,27 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
 async def pull_request_ci_status(event, gh, repo, *args, **kwargs):
     """Check CI status, then post it"""
     comment_url = event.data["commit"]["comments_url"]
-    commit_url = event.data["commit"]["url"]
-    combined_statuses_url = commit_url + "/status"
+    ci_status = event.data["state"]
     sha = event.data["sha"]
     short_sha = sha[0:7]
     if repo not in [
         'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'lelelelelez/leetcode'
+        'lelelelelez/leetcode', 'randytli/tablut'
     ]:
         repo = 'Others'
-    if checkCIStatus(combined_statuses_url) == 0:
+    if ci_status == 'pending':
         message = localConfig.cf.get(repo, 'STATUS_CI_PENDING')
         logger.info("%s Still Pending" % short_sha)
-    elif checkCIStatus(combined_statuses_url) == 1:
+    elif ci_status == 'success':
         message = localConfig.cf.get(repo, 'STATUS_CI_SUCCESS')
         logger.info("%s Passed All CI. " % short_sha)
     else:
-        ci_failure = checkCIStatus(combined_statuses_url)
-        error_message = checkCIDetail(commit_combined_ci_status, short_sha, ci_failure)
+        failed_ci_name = event.data['context']
+        failed_ci_link = event.data['target_url']
+        hyperlink_format = '<a href="{link}">{text}</a>'
+        failed_ci_hyperlink = hyperlink_format.format(link=failed_ci_link, text=failed_ci_name)
+        error_message = "🔍This commit: <b>%s</b> contains failed CI\r\n<b>Failed: </b>" % str(
+            short_sha) + failed_ci_hyperlink
         message = localConfig.cf.get(repo, error_message)
         logger.error("%s Contains Failed CI" % short_sha)
     await gh.post(comment_url, data={"body": message})
