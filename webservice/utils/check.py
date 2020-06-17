@@ -43,18 +43,19 @@ def parameter_accuracy(body):
     message = ''
     for key in PR_dic:
         test_list = PR_types if key == 'PR types' else PR_changes
+        test_list_lower = [l.lower() for l in test_list]
         value = PR_dic[key].strip().split(',')
         single_mess = ''
         if len(value) == 1 and value[0] == '':
-            message += '%s should be one of %s. but now is None.' % (key,
-                                                                     test_list)
+            message += '%s should be in %s. but now is None.' % (key,
+                                                                 test_list)
         else:
             for i in value:
-                i = i.strip()
-                if i not in test_list:
+                i = i.strip().lower()
+                if i not in test_list_lower:
                     single_mess += '%s.' % i
             if len(single_mess) != 0:
-                message += '%s should be one of %s. but now is [%s].' % (
+                message += '%s should be in %s. but now is [%s].' % (
                     key, test_list, single_mess)
     return message
 
