@@ -22,6 +22,7 @@ async def create_check_run(sha, gh, repo):
 
 
 @router.register("pull_request", action="opened")
+@router.register("pull_request", action="synchronize")
 async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     """Check if PR triggers CI"""
     pr_num = event.data['number']
@@ -33,6 +34,8 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
             'PaddlePaddle:release') and repo == 'PaddlePaddle/Paddle':
         message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED')
         logger.info("%s Trigger CI Successful." % pr_num)
+        if event.data['action'] == "opened":
+            await gh.post(url, data={"body": message})
     else:
         if repo not in [
                 'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
@@ -43,10 +46,12 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
         if checkPRCI(commit_url, sha, CHECK_CI) == False:
             message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED_NOT_CI')
             logger.error("%s Not Trigger CI." % pr_num)
+            await gh.post(url, data={"body": message})
         else:
             message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED')
             logger.info("%s Trigger CI Successful." % pr_num)
-    await gh.post(url, data={"body": message})
+            if event.data['action'] == "opened":
+                await gh.post(url, data={"body": message})
 
 
 @router.register("pull_request", action="synchronize")
