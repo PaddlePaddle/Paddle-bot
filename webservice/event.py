@@ -36,8 +36,8 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
         logger.info("%s Trigger CI Successful." % pr_num)
     else:
         if repo not in [
-                'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-                'lelelelelez/leetcode'
+            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode'
         ]:
             repo = 'Others'
         CHECK_CI = localConfig.cf.get(repo, 'CHECK_CI')
