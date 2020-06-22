@@ -36,8 +36,8 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
         logger.info("%s Trigger CI Successful." % pr_num)
     else:
         if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode'
+                'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+                'lelelelelez/leetcode'
         ]:
             repo = 'Others'
         CHECK_CI = localConfig.cf.get(repo, 'CHECK_CI')
@@ -58,8 +58,8 @@ async def pull_request_ci_status(event, gh, repo, *args, **kwargs):
     sha = event.data["sha"]
     short_sha = sha[0:7]
     if repo not in [
-        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'lelelelelez/leetcode', 'randytli/tablut'
+            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode', 'randytli/tablut'
     ]:
         repo = 'Others'
     if ci_status == 'pending':
@@ -72,7 +72,8 @@ async def pull_request_ci_status(event, gh, repo, *args, **kwargs):
         failed_ci_name = event.data['context']
         failed_ci_link = event.data['target_url']
         hyperlink_format = '<a href="{link}">{text}</a>'
-        failed_ci_hyperlink = hyperlink_format.format(link=failed_ci_link, text=failed_ci_name)
+        failed_ci_hyperlink = hyperlink_format.format(
+            link=failed_ci_link, text=failed_ci_name)
         error_message = "🔍This commit: <b>%s</b> contains failed CI\r\n<b>Failed: </b>" % str(
             short_sha) + failed_ci_hyperlink
         message = localConfig.cf.get(repo, error_message)
@@ -90,8 +91,8 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
     sha = event.data["pull_request"]["head"]["sha"]
     await create_check_run(sha, gh, repo)
     if repo not in [
-        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'lelelelelez/leetcode'
+            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     CHECK_TEMPLATE = localConfig.cf.get(repo, 'CHECK_TEMPLATE')
@@ -115,8 +116,8 @@ async def running_check_run(event, gh, repo, *args, **kwargs):
     await gh.patch(
         url, data=data, accept='application/vnd.github.antiope-preview+json')
     if repo not in [
-        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'lelelelelez/leetcode'
+            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     if check_pr_template == False:
@@ -139,7 +140,7 @@ async def running_check_run(event, gh, repo, *args, **kwargs):
             "output": {
                 "title": "checkTemplateSuccess",
                 "summary":
-                    "✅ This PR's description meets the template requirements!"
+                "✅ This PR's description meets the template requirements!"
             }
         }
     await gh.patch(
@@ -152,8 +153,8 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     url = event.data["pull_request"]["comments_url"]
     sender = event.data["sender"]["login"]
     if repo not in [
-        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'lelelelelez/leetcode'
+            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
@@ -167,8 +168,8 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     url = event.data["issue"]["comments_url"]
     sender = event.data["sender"]["login"]
     if repo not in [
-        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'lelelelelez/leetcode'
+            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode'
     ]:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
