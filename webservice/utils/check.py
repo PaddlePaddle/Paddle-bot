@@ -76,13 +76,19 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
     if len(CHECK_TEMPLATE) == 0 and len(body) == 0:
         res = False
     elif result != None:
-        if repo in ['lelelelelez/leetcode', 'randytli/tablut', 'PaddlePaddle/Paddle']:
+        if repo in [
+                'lelelelelez/leetcode', 'randytli/tablut',
+                'PaddlePaddle/Paddle'
+        ]:
             message = parameter_accuracy(body)
             res = True if message == '' else False
         else:
             res = True
     elif result == None:
         res = False
-        if repo in ['lelelelelez/leetcode', 'randytli/tablut', 'PaddlePaddle/Paddle']:
+        if repo in [
+                'lelelelelez/leetcode', 'randytli/tablut',
+                'PaddlePaddle/Paddle'
+        ]:
             message = parameter_accuracy(body)
     return res, message

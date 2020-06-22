@@ -5,7 +5,7 @@ from aiohttp import web
 from gidgethub import routing, sansio
 from gidgethub import aiohttp as gh_aiohttp
 from utils.auth import get_jwt, get_installation, get_installation_access_token
-import event
+import event as event
 import json
 
 routes = web.RouteTableDef()
