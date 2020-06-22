@@ -29,18 +29,24 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     url = event.data["pull_request"]["comments_url"]
     commit_url = event.data["pull_request"]["commits_url"]
     sha = event.data["pull_request"]["head"]["sha"]
-    if repo not in [
-        'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-        'lelelelelez/leetcode'
-    ]:
-        repo = 'Others'
-    CHECK_CI = localConfig.cf.get(repo, 'CHECK_CI')
-    if checkPRCI(commit_url, sha, CHECK_CI) == False:
-        message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED_NOT_CI')
-        logger.error("%s Not Trigger CI." % pr_num)
-    else:
+    base_branch = event.data["pull_request"]['base']['label']
+    if base_branch.startswith(
+            'PaddlePaddle:release') and repo == 'PaddlePaddle/Paddle':
         message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED')
         logger.info("%s Trigger CI Successful." % pr_num)
+    else:
+        if repo not in [
+            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode'
+        ]:
+            repo = 'Others'
+        CHECK_CI = localConfig.cf.get(repo, 'CHECK_CI')
+        if checkPRCI(commit_url, sha, CHECK_CI) == False:
+            message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED_NOT_CI')
+            logger.error("%s Not Trigger CI." % pr_num)
+        else:
+            message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED')
+            logger.info("%s Trigger CI Successful." % pr_num)
     await gh.post(url, data={"body": message})
 
 
