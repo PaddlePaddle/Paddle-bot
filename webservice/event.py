@@ -1,6 +1,8 @@
 from gidgethub import routing
 from utils.check import checkPRCI, checkPRTemplate
 from utils.readConfig import ReadConfig
+from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist
+from utils.db import Database
 import time
 import logging
 router = routing.Router()
@@ -148,3 +150,43 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     if sender == 'paddle-bot[bot]':
         message = localConfig.cf.get(repo, 'CLOSE_REGULAR')
         await gh.post(url, data={"body": message})
+
+
+@router.register("status")
+async def check_ci_status(event, gh, repo, *args, **kwargs):
+    """check_ci_status"""
+    if repo in ['PaddlePaddle/Paddle']:
+        status_dict = {}
+        state = event.data['state']
+        commitId = event.data['sha']
+        context = event.data['context']
+        status_dict['commitId'] = commitId
+        status_dict['ciName'] = context
+        if state == 'success':
+            commit_message = event.data['commit']['commit']['message']
+            document_fix = ifDocumentFix(commit_message)
+            if document_fix == False:
+                target_url = event.data['target_url']
+                generateCiIndex(repo, commitId, target_url)
+        else:
+            print("commitID: %s" % commitId)
+            print("state : %s" % state)
+        if state in ['success', 'failure']:
+            ifInsert = True
+            status_dict['status'] = state
+            insertTime = int(time.time())
+            query_stat = "SELECT * FROM paddle_ci_status WHERE ciName='%s' and commitId='%s' and status='%s' order by time desc" % (
+                status_dict['ciName'], status_dict['commitId'],
+                status_dict['status'])
+            queryTime = ifAlreadyExist(query_stat)
+            if queryTime != '':
+                ifInsert = False if insertTime - queryTime < 30 else True
+            if ifInsert == True:
+                db = Database()
+                result = db.insert('paddle_ci_status', status_dict)
+                if result == True:
+                    logger.info('%s %s insert paddle_ci_status success!' %
+                                (context, commitId))
+                else:
+                    logger.error('%s %s insert paddle_ci_status failed!' %
+                                 (context, commitId))
