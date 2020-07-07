@@ -3,6 +3,7 @@ from utils.check import checkPRCI, checkPRTemplate
 from utils.readConfig import ReadConfig
 from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist
 from utils.db import Database
+from utils.convert import javaTimeTotimeStamp
 import time
 import logging
 router = routing.Router()
@@ -21,6 +22,32 @@ async def create_check_run(sha, gh, repo):
     url = 'https://api.github.com/repos/%s/check-runs' % repo
     await gh.post(
         url, data=data, accept='application/vnd.github.antiope-preview+json')
+
+
+@router.register("pull_request", action="opened")
+@router.register("pull_request", action="synchronize")
+async def get_commitCreateTime(event, gh, repo, *args, **kwargs):
+    "Get commit CreateTime"
+    create_dict = {}
+    create_dict['repo'] = repo
+    pr_num = event.data['number']
+    sha = event.data["pull_request"]["head"]["sha"]
+    create_dict['PR'] = pr_num
+    create_dict['commitId'] = sha
+    if event.data['action'] == "opened":
+        CreateTime = event.data["pull_request"]["created_at"]
+    elif event.data['action'] == "synchronize":
+        CreateTime = event.data["pull_request"]["updated_at"]
+    createTime = javaTimeTotimeStamp(CreateTime)
+    create_dict['createTime'] = createTime
+    db = Database()
+    result = db.insert('commit_create_time', create_dict)
+    if result == True:
+        logger.info('%s %s insert commit_create_time success: %s!' %
+                    (pr_num, sha, createTime))
+    else:
+        logger.error('%s %s insert commit_create_time failed: %s!' %
+                     (pr_num, sha, createTime))
 
 
 @router.register("pull_request", action="opened")

@@ -67,7 +67,7 @@ def analyze_ipipe_log(sha, target_url):
             'jobGroupBuildBeans'][0]
         PR = res['pipelineBuildBean']['stageBuildBeans'][0]['outParams'][
             'AGILE_PULL_ID']
-        createTime = get_commit_createTime(sha)
+        createTime = get_commit_createTime(PR, sha)
         index_dict['PR'] = int(PR)
         index_dict['commitId'] = sha
         index_dict['createTime'] = createTime
@@ -183,22 +183,16 @@ def get_index(index_dict, sha, pipelineConfName):
                         (pipelineConfName, index_dict['PR'], sha))
 
 
-def get_commit_createTime(sha):
+def get_commit_createTime(PR, sha):
     """get commit createtime"""
-    url = 'https://api.github.com/repos/PaddlePaddle/Paddle/commits/%s' % sha
-    headers = {
-        'authorization': "auth message",
-        'accept': "application/vnd.github.antiope-preview+json",
-        'content-type': "application/json"
-    }
-    response = requests.request("GET", url, headers=headers).json()
-    commitTime = response['commit']['committer']['date']
-    commitTime = commitTime.replace('T', ' ').replace('Z',
-                                                      '')  #java time To string
-    commitTime = time.strptime(commitTime, '%Y-%m-%d %H:%M:%S')
-    dt = datetime.datetime.fromtimestamp(time.mktime(commitTime))
-    actualCreateTime = (
-        dt + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
-    timeArray = time.strptime(actualCreateTime, "%Y-%m-%d %H:%M:%S")
-    createTime = int(time.mktime(timeArray))
+    query_stat = "SELECT createTime FROM commit_create_time WHERE PR=%s and commitId='%s'" % (
+        PR, sha)
+    db = Database()
+    result = list(db.query(query_stat))
+    if len(result) != 0:
+        createTime = result[0][0]['createTime']
+    else:
+        logger.error("The commit created before 2020-07-03 17:10: %s, %s" %
+                     (PR, sha))
+        createTime = 0
     return createTime
