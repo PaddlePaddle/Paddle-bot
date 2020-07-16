@@ -1,5 +1,5 @@
 from gidgethub import routing
-from utils.check import checkPRCI, checkPRTemplate
+from utils.check import checkPRNotCI, checkPRTemplate
 from utils.readConfig import ReadConfig
 from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist
 from utils.db import Database
@@ -59,28 +59,26 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     commit_url = event.data["pull_request"]["commits_url"]
     sha = event.data["pull_request"]["head"]["sha"]
     base_branch = event.data["pull_request"]['base']['label']
+    if repo not in [
+            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode'
+    ]:
+        repo = 'Others'
     if base_branch.startswith(
             'PaddlePaddle:release') and repo == 'PaddlePaddle/Paddle':
         message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED')
-        logger.info("%s Trigger CI Successful." % pr_num)
+        logger.info("%s_%s Trigger CI Successful." % (pr_num, sha))
         if event.data['action'] == "opened":
             await gh.post(url, data={"body": message})
     else:
-        if repo not in [
-                'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-                'lelelelelez/leetcode'
-        ]:
-            repo = 'Others'
-        CHECK_CI = localConfig.cf.get(repo, 'CHECK_CI')
-        if checkPRCI(commit_url, sha, CHECK_CI) == False:
-            message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED_NOT_CI')
-            logger.error("%s Not Trigger CI." % pr_num)
-            await gh.post(url, data={"body": message})
-        else:
+        if checkPRNotCI(commit_url, sha) == False:
             message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED')
-            logger.info("%s Trigger CI Successful." % pr_num)
-            if event.data['action'] == "opened":
-                await gh.post(url, data={"body": message})
+            logger.info("%s_%s Trigger CI Successful." % (pr_num, sha))
+        else:
+            message = "Hi, It's a test PR, it will not trigger CI. If you want to trigger CI, please remove `notest` in your commit message."
+            logger.info("%s_%s is a test PR." % (pr_num, sha))
+        if event.data['action'] == "opened":
+            await gh.post(url, data={"body": message})
 
 
 @router.register("pull_request", action="synchronize")
