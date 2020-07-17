@@ -149,7 +149,6 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
                 await gh.patch(target_update_url, data={"body": message})
 
 
-
 @router.register("check_run", action="created")
 async def running_check_run(event, gh, repo, *args, **kwargs):
     """running checkrun"""
