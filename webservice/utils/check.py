@@ -1,6 +1,7 @@
 import requests
 import re
 
+
 def checkPRCI(commit_url, sha, CHECK_CI):
     """
     Check if PR's commit message can trigger CI.
@@ -15,16 +16,51 @@ def checkPRCI(commit_url, sha, CHECK_CI):
     reponse = requests.get(commit_url).json()
     for i in range(0, len(reponse)):
         if reponse[i]['sha'] == sha:
-            if CHECK_CI in reponse[i]['commit']['message'] or len(CHECK_CI) == 0:
+            if CHECK_CI in reponse[i]['commit']['message'] or len(
+                    CHECK_CI) == 0:
                 res = True
     return res
+
 
 def re_rule(body, CHECK_TEMPLATE):
     PR_RE = re.compile(CHECK_TEMPLATE, re.DOTALL)
     result = PR_RE.search(body)
     return result
 
-def checkPRTemplate(body, CHECK_TEMPLATE, CHECK_TEMPLATE_doc=None):
+
+def parameter_accuracy(body):
+    PR_dic = {}
+    PR_types = [
+        'New features', 'Bug fixes', 'Function optimization',
+        'Performance optimization', 'Breaking changes', 'Others'
+    ]
+    PR_changes = ['OPs', 'APIs', 'Docs', 'Others']
+    body = re.sub("\r\n", "", body)
+    type_end = body.find('### PR changes')
+    changes_end = body.find('### Describe')
+    PR_dic['PR types'] = body[len('### PR types'):type_end]
+    PR_dic['PR changes'] = body[type_end + 14:changes_end]
+    message = ''
+    for key in PR_dic:
+        test_list = PR_types if key == 'PR types' else PR_changes
+        test_list_lower = [l.lower() for l in test_list]
+        value = PR_dic[key].strip().split(',')
+        single_mess = ''
+        if len(value) == 1 and value[0] == '':
+            message += '%s should be in %s. but now is None.' % (key,
+                                                                 test_list)
+        else:
+            for i in value:
+                i = i.strip().lower()
+                if i not in test_list_lower:
+                    single_mess += '%s.' % i
+            if len(single_mess) != 0:
+                message += '%s should be in %s. but now is [%s].' % (
+                    key, test_list, single_mess)
+    return message
+
+
+def checkPRTemplate(repo, body, CHECK_TEMPLATE):
     """
     Check if PR's description meet the standard of template
     Args:
@@ -34,23 +70,25 @@ def checkPRTemplate(body, CHECK_TEMPLATE, CHECK_TEMPLATE_doc=None):
         res: True or False
     """
     res = False
-    if CHECK_TEMPLATE_doc != None:
-        print(CHECK_TEMPLATE_doc)
-        note1 = '<!-- ADD SCREENSHOT HERE IF APPLICABLE. -->'
-        note2 = '<!-- DESCRIBE THE BUG OR REQUIREMENT HERE. eg. #2020（格式为 #Issue编号）-->'
-        body_no_note = re.sub(note2, "", re.sub(note1, "", body))
-        doc_check = "- PR changes:（改动点）is \(\s*[A-D]*[C][A-D]*\s*\):"
-        match_doc = re.search(doc_check, body, re.M|re.I)
-        print(match_doc)
-        if match_doc != None:
-            result_doc = re_rule(body_no_note, CHECK_TEMPLATE_doc)
-            if result_doc != None:
-                res = True
-            return res
-
+    note = r'<!-- Demo: https://github.com/PaddlePaddle/Paddle/pull/24810 -->\r\n|<!-- One of \[ New features \| Bug fixes \| Function optimization \| Performance optimization \| Breaking changes \| Others \] -->|<!-- One of\t\[ OPs \| APIs \| Docs \| Others \] -->|<!-- Describe what this PR does -->'
+    body = re.sub(note, "", body)
     result = re_rule(body, CHECK_TEMPLATE)
+    message = ''
     if len(CHECK_TEMPLATE) == 0 and len(body) == 0:
         res = False
     elif result != None:
-        res = True
-    return res
+        if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
+            message = parameter_accuracy(body)
+            res = True if message == '' else False
+        else:
+            res = True
+    elif result == None:
+        res = False
+        if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
+            message = parameter_accuracy(body)
+    return res, message
+
+
+def checkComments(url):
+    response = requests.get(url).json()
+    return response
