@@ -52,6 +52,34 @@ async def get_commitCreateTime(event, gh, repo, *args, **kwargs):
 
 @router.register("pull_request", action="opened")
 @router.register("pull_request", action="synchronize")
+@router.register("pull_request", action="opened")
+@router.register("pull_request", action="synchronize")
+async def get_commitCreateTime(event, gh, repo, *args, **kwargs):
+    "Get commit CreateTime"
+    create_dict = {}
+    create_dict['repo'] = repo
+    pr_num = event.data['number']
+    sha = event.data["pull_request"]["head"]["sha"]
+    create_dict['PR'] = pr_num
+    create_dict['commitId'] = sha
+    if event.data['action'] == "opened":
+        CreateTime = event.data["pull_request"]["created_at"]
+    elif event.data['action'] == "synchronize":
+        CreateTime = event.data["pull_request"]["updated_at"]
+    createTime = javaTimeTotimeStamp(CreateTime)
+    create_dict['createTime'] = createTime
+    db = Database()
+    result = db.insert('commit_create_time', create_dict)
+    if result == True:
+        logger.info('%s %s insert commit_create_time success: %s!' %
+                    (pr_num, sha, createTime))
+    else:
+        logger.error('%s %s insert commit_create_time failed: %s!' %
+                     (pr_num, sha, createTime))
+
+
+@router.register("pull_request", action="opened")
+@router.register("pull_request", action="synchronize")
 async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     """Check if PR triggers CI"""
     pr_num = event.data['number']
@@ -119,6 +147,7 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
                             pr_num)
                 target_update_url = comment_list[i]['url']
                 await gh.patch(target_update_url, data={"body": message})
+
 
 
 @router.register("check_run", action="created")
