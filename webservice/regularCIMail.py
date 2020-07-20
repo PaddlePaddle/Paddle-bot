@@ -390,14 +390,18 @@ def sendMail(ciIndex_thisWeek, ciIndex_lastWeek=0):
     mail.send()
 
 
-def main():
-    ciIndex_thisWeek = queryCIDataWeekly('2020-07-13 00:00:00',
-                                         '2020-07-17 00:00:00')
-    ciIndex_lastWeek = queryCIDataWeekly('2020-07-07 00:00:00',
-                                         '2020-07-13 00:00:00')
+def regularCIMail_job():
+    now = datetime.datetime.now()
+    #获取今天零点
+    zeroToday = now - datetime.timedelta(
+        hours=now.hour,
+        minutes=now.minute,
+        seconds=now.second,
+        microseconds=now.microsecond)
+    #7天前0点
+    before_7Days = zeroToday - datetime.timedelta(days=7)
+    #14天前0点
+    before_14Days = zeroToday - datetime.timedelta(days=14)
+    ciIndex_thisWeek = queryCIDataWeekly(str(before_7Days), str(zeroToday))
+    ciIndex_lastWeek = queryCIDataWeekly(str(before_14Days), str(before_7Days))
     sendMail(ciIndex_thisWeek, ciIndex_lastWeek)
-
-
-main()
-
-#write_excel_xls1()
