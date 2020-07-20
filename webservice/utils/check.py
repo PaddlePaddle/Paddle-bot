@@ -2,13 +2,12 @@ import requests
 import re
 
 
-def checkPRCI(commit_url, sha, CHECK_CI):
+def checkPRNotCI(commit_url, sha):
     """
     Check if PR's commit message can trigger CI.
     Args:
         commit_url(url): PR's commit url.
         sha(str): PR's commit code. (The only code provided by GitHub)
-        CHECK_CI(str): PR's commit message checker.
     Returns:
         res: True or False
     """
@@ -16,8 +15,7 @@ def checkPRCI(commit_url, sha, CHECK_CI):
     reponse = requests.get(commit_url).json()
     for i in range(0, len(reponse)):
         if reponse[i]['sha'] == sha:
-            if CHECK_CI in reponse[i]['commit']['message'] or len(
-                    CHECK_CI) == 0:
+            if 'notest' in reponse[i]['commit']['message']:
                 res = True
     return res
 
