@@ -90,3 +90,11 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
 def checkComments(url):
     response = requests.get(url).json()
     return response
+
+
+def checkCIState(combined_statuses_url):
+    res = False
+    response = requests.get(combined_statuses_url).json()
+    if response['state'] == "success":
+        res = True
+    return res
