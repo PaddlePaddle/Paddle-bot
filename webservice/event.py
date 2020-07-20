@@ -1,5 +1,5 @@
 from gidgethub import routing
-from utils.check import checkPRCI, checkPRTemplate, checkComments
+from utils.check import checkPRNotCI, checkPRTemplate
 from utils.readConfig import ReadConfig
 from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist
 from utils.db import Database
@@ -52,34 +52,6 @@ async def get_commitCreateTime(event, gh, repo, *args, **kwargs):
 
 @router.register("pull_request", action="opened")
 @router.register("pull_request", action="synchronize")
-@router.register("pull_request", action="opened")
-@router.register("pull_request", action="synchronize")
-async def get_commitCreateTime(event, gh, repo, *args, **kwargs):
-    "Get commit CreateTime"
-    create_dict = {}
-    create_dict['repo'] = repo
-    pr_num = event.data['number']
-    sha = event.data["pull_request"]["head"]["sha"]
-    create_dict['PR'] = pr_num
-    create_dict['commitId'] = sha
-    if event.data['action'] == "opened":
-        CreateTime = event.data["pull_request"]["created_at"]
-    elif event.data['action'] == "synchronize":
-        CreateTime = event.data["pull_request"]["updated_at"]
-    createTime = javaTimeTotimeStamp(CreateTime)
-    create_dict['createTime'] = createTime
-    db = Database()
-    result = db.insert('commit_create_time', create_dict)
-    if result == True:
-        logger.info('%s %s insert commit_create_time success: %s!' %
-                    (pr_num, sha, createTime))
-    else:
-        logger.error('%s %s insert commit_create_time failed: %s!' %
-                     (pr_num, sha, createTime))
-
-
-@router.register("pull_request", action="opened")
-@router.register("pull_request", action="synchronize")
 async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     """Check if PR triggers CI"""
     pr_num = event.data['number']
@@ -87,28 +59,26 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     commit_url = event.data["pull_request"]["commits_url"]
     sha = event.data["pull_request"]["head"]["sha"]
     base_branch = event.data["pull_request"]['base']['label']
+    if repo not in [
+            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode'
+    ]:
+        repo = 'Others'
     if base_branch.startswith(
             'PaddlePaddle:release') and repo == 'PaddlePaddle/Paddle':
         message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED')
-        logger.info("%s Trigger CI Successful." % pr_num)
+        logger.info("%s_%s Trigger CI Successful." % (pr_num, sha))
         if event.data['action'] == "opened":
             await gh.post(url, data={"body": message})
     else:
-        if repo not in [
-                'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-                'lelelelelez/leetcode'
-        ]:
-            repo = 'Others'
-        CHECK_CI = localConfig.cf.get(repo, 'CHECK_CI')
-        if checkPRCI(commit_url, sha, CHECK_CI) == False:
-            message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED_NOT_CI')
-            logger.error("%s Not Trigger CI." % pr_num)
-            await gh.post(url, data={"body": message})
-        else:
+        if checkPRNotCI(commit_url, sha) == False:
             message = localConfig.cf.get(repo, 'PULL_REQUEST_OPENED')
-            logger.info("%s Trigger CI Successful." % pr_num)
-            if event.data['action'] == "opened":
-                await gh.post(url, data={"body": message})
+            logger.info("%s_%s Trigger CI Successful." % (pr_num, sha))
+        else:
+            message = "Hi, It's a test PR, it will not trigger CI. If you want to trigger CI, please remove `notest` in your commit message."
+            logger.info("%s_%s is a test PR." % (pr_num, sha))
+        if event.data['action'] == "opened":
+            await gh.post(url, data={"body": message})
 
 
 @router.register("pull_request", action="synchronize")
@@ -135,18 +105,6 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
         logger.error("%s Not Follow Template." % pr_num)
         if event.data['action'] == "opened":
             await gh.post(url, data={"body": message})
-    else:
-        comment_list = checkComments(url)
-        for i in len(comment_list):
-            comment_sender = comment_list[i]['user']['login']
-            comment_body = comment_list[i]['body']
-            if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
-                    '❌'):
-                message = localConfig.cf.get(repo, 'PR_CORRECT_DESCRIPTION')
-                logger.info("%s Correct PR Description and Meet Template" %
-                            pr_num)
-                target_update_url = comment_list[i]['url']
-                await gh.patch(target_update_url, data={"body": message})
 
 
 @router.register("check_run", action="created")
