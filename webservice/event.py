@@ -235,21 +235,27 @@ async def check_ci_status(event, gh, repo, *args, **kwargs):
                         await gh.post(
                             comment_url, data={"body": error_message})
                 else:
-                    latest_comment = comment_list[len(comment_list)]
-                    latest_body = latest_comment['body']
-                    update_url = latest_comment['url']
-                    if failed_ci_link.startswith('https://xly.bce.baidu.com'):
-                        failed_ci_hyperlink = hyperlink_format.format(
-                            link=failed_ci_link, text=context)
-                        update_message = latest_body + "\r\n" + xly_template % str(
-                            shortID) + failed_ci_hyperlink
-                        await gh.patch(
-                            update_url, data={"body": update_message})
-                    else:
-                        update_message = latest_body + "\r\n" + tc_template % (
-                            str(shortID), context)
-                        await gh.patch(
-                            update_url, data={"body": update_message})
+                    for i in len(comment_list):
+                        comment_sender = comment_list[i]['user']['login']
+                        comment_body = comment_list[i]['body']
+                        if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
+                                '🕵️'):
+                            latest_comment = comment_list[i]
+                            latest_body = latest_comment['body']
+                            update_url = latest_comment['url']
+                            if failed_ci_link.startswith(
+                                    'https://xly.bce.baidu.com'):
+                                failed_ci_hyperlink = hyperlink_format.format(
+                                    link=failed_ci_link, text=context)
+                                update_message = latest_body + "\r\n" + xly_template % str(
+                                    shortID) + failed_ci_hyperlink
+                                await gh.patch(
+                                    update_url, data={"body": update_message})
+                            else:
+                                update_message = latest_body + "\r\n" + tc_template % (
+                                    str(shortID), context)
+                                await gh.patch(
+                                    update_url, data={"body": update_message})
         if state in ['success', 'failure']:
             ifInsert = True
             status_dict['status'] = state
