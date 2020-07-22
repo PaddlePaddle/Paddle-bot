@@ -219,19 +219,21 @@ async def check_ci_status(event, gh, repo, *args, **kwargs):
             comment_list = checkComments(comment_url)
             failed_ci_link = event.data['target_url']
             hyperlink_format = '<a href="{link}">{text}</a>'
-            xly_template = "🕵️Commit ID: <b>%s</b> contains failed CI.\r\n<b>🔍Failed: </b>"
-            tc_template = "🕵️Commit ID: <b>%s</b> contains failed CI.\r\n<b>🔍Failed: %s</b>"
+            failed_template = "🕵️Commit ID: <b>%s</b> contains failed CI.\r\n"
+            xly_template = "<b>🔍Failed: </b>"
+            tc_template = "<b>🔍Failed: %s</b>"
             if state in ['failure', 'error']:
                 if comment_list == '[]':
                     if failed_ci_link.startswith('https://xly.bce.baidu.com'):
                         failed_ci_hyperlink = hyperlink_format.format(
                             link=failed_ci_link, text=context)
-                        error_message = xly_template % str(
-                            shortID) + failed_ci_hyperlink
+                        error_message = failed_template % str(
+                            shortID) + xly_template + failed_ci_hyperlink
                         await gh.post(
                             comment_url, data={"body": error_message})
                     else:
-                        error_message = tc_template % (str(shortID), context)
+                        error_message = failed_template % str(
+                            shortID) + tc_template % context
                         await gh.post(
                             comment_url, data={"body": error_message})
                 else:
@@ -247,13 +249,11 @@ async def check_ci_status(event, gh, repo, *args, **kwargs):
                                     'https://xly.bce.baidu.com'):
                                 failed_ci_hyperlink = hyperlink_format.format(
                                     link=failed_ci_link, text=context)
-                                update_message = latest_body + "\r\n" + xly_template % str(
-                                    shortID) + failed_ci_hyperlink
+                                update_message = latest_body + "\r\n" + xly_template + failed_ci_hyperlink
                                 await gh.patch(
                                     update_url, data={"body": update_message})
                             else:
-                                update_message = latest_body + "\r\n" + tc_template % (
-                                    str(shortID), context)
+                                update_message = latest_body + "\r\n" + tc_template % context
                                 await gh.patch(
                                     update_url, data={"body": update_message})
         if state in ['success', 'failure']:
