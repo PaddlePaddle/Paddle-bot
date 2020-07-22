@@ -87,9 +87,6 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
     return res, message
 
 
-def checkComments(url):
-    response = requests.get(url).json()
-    return response
 
 
 def checkCIState(combined_statuses_url):

@@ -1,5 +1,5 @@
 from gidgethub import routing
-from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState
+from utils.check import checkPRNotCI, checkPRTemplate, checkCIState
 from utils.readConfig import ReadConfig
 from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist
 from utils.db import Database
@@ -105,18 +105,6 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
         logger.error("%s Not Follow Template." % pr_num)
         if event.data['action'] == "opened":
             await gh.post(url, data={"body": message})
-    else:
-        comment_list = checkComments(url)
-        for i in len(comment_list):
-            comment_sender = comment_list[i]['user']['login']
-            comment_body = comment_list[i]['body']
-            if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
-                    '❌'):
-                message = localConfig.cf.get(repo, 'PR_CORRECT_DESCRIPTION')
-                logger.info("%s Correct PR Description and Meet Template" %
-                            pr_num)
-                update_url = comment_list[i]['url']
-                await gh.patch(update_url, data={"body": message})
 
 
 @router.register("check_run", action="created")
