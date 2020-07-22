@@ -87,8 +87,6 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
     return res, message
 
 
-
-
 def checkCIState(combined_statuses_url):
     res = False
     response = requests.get(combined_statuses_url).json()
