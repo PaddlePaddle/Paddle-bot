@@ -85,3 +85,11 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
         if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
             message = parameter_accuracy(body)
     return res, message
+
+
+def checkCIState(combined_statuses_url):
+    res = False
+    response = requests.get(combined_statuses_url).json()
+    if response['state'] == "success":
+        res = True
+    return res

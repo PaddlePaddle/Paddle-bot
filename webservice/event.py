@@ -1,5 +1,5 @@
 from gidgethub import routing
-from utils.check import checkPRNotCI, checkPRTemplate
+from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState
 from utils.readConfig import ReadConfig
 from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist
 from utils.db import Database
@@ -187,15 +187,63 @@ async def check_ci_status(event, gh, repo, *args, **kwargs):
         context = event.data['context']
         status_dict['commitId'] = commitId
         status_dict['ciName'] = context
+        shortID = commitId[0:7]
+        comment_url = event.data["commit"]["comments_url"]
+        commit_url = event.data["commit"]["url"]
+        combined_statuses_url = commit_url + "/status"
+        combined_ci_status = checkCIState(combined_statuses_url)
         if state == 'success':
             commit_message = event.data['commit']['commit']['message']
             document_fix = ifDocumentFix(commit_message)
             if document_fix == False:
                 target_url = event.data['target_url']
                 generateCiIndex(repo, commitId, target_url)
+            if combined_ci_status == True:
+                message = localConfig.cf.get(repo, 'STATUS_CI_SUCCESS')
+                await gh.post(comment_url, data={"body": message})
         else:
-            print("commitID: %s" % commitId)
+            print("commitID: %s" % shortID)
             print("state : %s" % state)
+            comment_list = checkComments(comment_url)
+            failed_ci_link = event.data['target_url']
+            hyperlink_format = '<a href="{link}">{text}</a>'
+            failed_template = "🕵️Commit ID: <b>%s</b> contains failed CI.\r\n"
+            xly_template = "<b>🔍Failed: </b>"
+            tc_template = "<b>🔍Failed: %s</b>"
+            if state in ['failure', 'error']:
+                if comment_list == '[]':
+                    if failed_ci_link.startswith('https://xly.bce.baidu.com'):
+                        failed_ci_hyperlink = hyperlink_format.format(
+                            link=failed_ci_link, text=context)
+                        error_message = failed_template % str(
+                            shortID) + xly_template + failed_ci_hyperlink
+                        await gh.post(
+                            comment_url, data={"body": error_message})
+                    else:
+                        error_message = failed_template % str(
+                            shortID) + tc_template % context
+                        await gh.post(
+                            comment_url, data={"body": error_message})
+                else:
+                    for i in len(comment_list):
+                        comment_sender = comment_list[i]['user']['login']
+                        comment_body = comment_list[i]['body']
+                        if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
+                                '🕵️'):
+                            latest_comment = comment_list[i]
+                            latest_body = latest_comment['body']
+                            update_url = latest_comment['url']
+                            if failed_ci_link.startswith(
+                                    'https://xly.bce.baidu.com'):
+                                failed_ci_hyperlink = hyperlink_format.format(
+                                    link=failed_ci_link, text=context)
+                                update_message = latest_body + "\r\n" + xly_template + failed_ci_hyperlink
+                                await gh.patch(
+                                    update_url, data={"body": update_message})
+                            else:
+                                update_message = latest_body + "\r\n" + tc_template % context
+                                await gh.patch(
+                                    update_url, data={"body": update_message})
         if state in ['success', 'failure']:
             ifInsert = True
             status_dict['status'] = state
