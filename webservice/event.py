@@ -100,13 +100,23 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
     global check_pr_template_message
     check_pr_template, check_pr_template_message = checkPRTemplate(
         repo, BODY, CHECK_TEMPLATE)
+    comment_list = checkComments(url)
     if check_pr_template == False:
         message = localConfig.cf.get(repo, 'NOT_USING_TEMPLATE')
         logger.error("%s Not Follow Template." % pr_num)
         if event.data['action'] == "opened":
             await gh.post(url, data={"body": message})
+        for i in range(len(comment_list)):
+            comment_sender = comment_list[i]['user']['login']
+            comment_body = comment_list[i]['body']
+            if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
+                    '✅'):
+                message = localConfig.cf.get(repo, 'NOT_USING_TEMPLATE')
+                logger.error("%s Not Follow Template." % pr_num)
+                update_url = comment_list[i]['url']
+                if event.data['action'] == "opened":
+                    await gh.patch(update_url, data={"body": message})
     else:
-        comment_list = checkComments(url)
         for i in range(len(comment_list)):
             comment_sender = comment_list[i]['user']['login']
             comment_body = comment_list[i]['body']
