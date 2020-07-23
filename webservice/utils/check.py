@@ -85,3 +85,8 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
         if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
             message = parameter_accuracy(body)
     return res, message
+
+
+def checkComments(url):
+    response = requests.get(url).json()
+    return response
