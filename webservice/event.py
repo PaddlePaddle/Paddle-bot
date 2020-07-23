@@ -225,7 +225,7 @@ async def check_ci_status(event, gh, repo, *args, **kwargs):
                         await gh.post(
                             comment_url, data={"body": error_message})
                 else:
-                    for i in len(comment_list):
+                    for i in range(len(comment_list)):
                         comment_sender = comment_list[i]['user']['login']
                         comment_body = comment_list[i]['body']
                         if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
