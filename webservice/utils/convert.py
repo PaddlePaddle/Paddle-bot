@@ -12,3 +12,9 @@ def javaTimeTotimeStamp(commitTime):
     timeArray = time.strptime(actualCreateTime, "%Y-%m-%d %H:%M:%S")
     createTime = int(time.mktime(timeArray))
     return createTime
+
+
+def strTimeTotimeStamp(strTime):
+    time_array = time.strptime(strTime, '%Y-%m-%d %H:%M:%S')
+    timeStamp = int(time.mktime(time_array))
+    return timeStamp

@@ -93,3 +93,7 @@ def checkCIState(combined_statuses_url):
     if response['state'] == "success":
         res = True
     return res
+
+def checkComments(url):
+    response = requests.get(url).json()
+    return response
