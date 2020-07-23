@@ -94,6 +94,7 @@ def checkCIState(combined_statuses_url):
         res = True
     return res
 
+
 def checkComments(url):
     response = requests.get(url).json()
     return response
