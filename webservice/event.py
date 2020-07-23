@@ -107,12 +107,12 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
             await gh.post(url, data={"body": message})
     else:
         comment_list = checkComments(url)
-        for i in len(comment_list):
+        for i in range(len(comment_list)):
             comment_sender = comment_list[i]['user']['login']
             comment_body = comment_list[i]['body']
             if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
                     '❌'):
-                message = localConfig.cf.getg(repo, 'PR_CORRECT_DESCRIPTION')
+                message = localConfig.cf.get(repo, 'PR_CORRECT_DESCRIPTION')
                 logger.info("%s Correct PR Description and Meet Template" %
                             pr_num)
                 update_url = comment_list[i]['url']
