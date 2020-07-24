@@ -31,10 +31,14 @@ def daily_jobs():
     executors = {'default': ThreadPoolExecutor(max_workers=30), \
                  'processpool': ProcessPoolExecutor(max_workers=30)}
     sched = BackgroundScheduler(executors=executors)
-    for job in ['regularClose_job']:
+    for job in ['regularClose_job', 'regularCIMail_job']:
         cf = localConfig.cf
-        sched.add_job(regularClose_job, cf.get(job, 'type'), day_of_week=cf.get(job, 'day_of_week'), hour=cf.get(job, 'hour'), minute=cf.get(job, 'minute'), \
-                        second=cf.get(job, 'second'), misfire_grace_time=int(cf.get(job, 'misfire_grace_time')))
+        if job == 'regularClose_job':
+            sched.add_job(regularClose_job, cf.get(job, 'type'), day_of_week=cf.get(job, 'day_of_week'), hour=cf.get(job, 'hour'), minute=cf.get(job, 'minute'), \
+                            second=cf.get(job, 'second'), misfire_grace_time=int(cf.get(job, 'misfire_grace_time')))
+        elif job == 'regularCIMail_job':
+            sched.add_job(regularCIMail_job, cf.get(job, 'type'), day_of_week=cf.get(job, 'day_of_week'), hour=cf.get(job, 'hour'), minute=cf.get(job, 'minute'), \
+                            second=cf.get(job, 'second'), misfire_grace_time=int(cf.get(job, 'misfire_grace_time')))
     sched.add_listener(job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
     sched._logger = logging
     sched.start()
