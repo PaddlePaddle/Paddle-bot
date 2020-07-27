@@ -88,11 +88,9 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
 
 
 def checkCIState(combined_statuses_url):
-    res = False
     response = requests.get(combined_statuses_url).json()
-    if response['state'] == "success":
-        res = True
-    return res
+    combined_ci_status = response['state']
+    return combined_ci_status
 
 
 def checkComments(url):
