@@ -232,99 +232,117 @@ async def check_ci_status(event, gh, repo, *args, **kwargs):
 
 
 @router.register("status")
-async def failed_ci_detector(event, gh, repo, *args, **kwargs):
-    """when find failed ci/passed all ci, make comment"""
-    if repo in ['PaddlePaddle/Paddle']:
+async def check_merge_availability(event, gh, repo, *args, **kwargs):
+    """check whether passed all ci"""
+    if repo in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark']:
+        state = event.data['state']
+        commit_url = event.data["commit"]["url"]
+        comment_url = event.data["commit"]["comments_url"]
+        combined_statuses_url = commit_url + "/status"
+        comment_list = checkComments(comment_url)
+        combined_ci_status = checkCIState(combined_statuses_url)
+        if state == 'success' and combined_ci_status == 'success':
+            if len(comment_list) == 0:
+                message = localConfig.cf.get(repo, 'STATUS_CI_SUCCESS')
+                await gh.post(comment_url, data={"body": message})
+            else:
+                for i in range(len(comment_list)):
+                    comment_sender = comment_list[i]['user']['login']
+                    comment_body = comment_list[i]['body']
+                    update_url = comment_list[i]['url']
+                    if comment_sender == "paddle-bot[bot]" and comment_body.startswith('## 🕵️'):
+                        update_message = localConfig.cf.get(
+                            repo, 'STATUS_CI_SUCCESS')
+                        await gh.patch(
+                            update_url, data={"body": update_message})
+                    else:
+                        message = localConfig.cf.get(
+                            repo, 'STATUS_CI_SUCCESS')
+                        await gh.post(
+                            comment_url, data={"body": message})
+
+@router.register("status")
+async def check_ci_failure(event, gh, repo, *args, **kwargs):
+    """gradually find failed ci and make comment"""
+    if repo in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark']:
         state = event.data['state']
         commitId = event.data['sha']
         context = event.data['context']
         shortId = commitId[0:7]
         comment_url = event.data["commit"]["comments_url"]
-        commit_url = event.data["commit"]["url"]
-        combined_statuses_url = commit_url + "/status"
         ci_link = event.data['target_url']
         hyperlink_format = '<a href="{link}">{text}</a>'
-        failed_template = "🕵️Commit ID: <b>%s</b> contains failed CI.\r\n"
-        xly_template = "<b>🔍Failed: </b>"
-        tc_template = "<b>🔍Failed: %s</b>"
+        failed_header = "## 🕵️ CI failures summary\r\n"
+        failed_template = "🔍 Commit ID: <b>%s</b> contains failed CI.\r\n"
+        failed_ci_bullet = "- <b>Failed: %s</b>"
         failed_ci_hyperlink = hyperlink_format.format(
             link=ci_link, text=context)
         comment_list = checkComments(comment_url)
-        combined_ci_status = checkCIState(combined_statuses_url)
-        if state in ['success', 'failure', 'error']:
-            if state == 'success':
-                if combined_ci_status == 'success':
-                    if comment_list == '[]':
-                        message = localConfig.cf.get(repo, 'STATUS_CI_SUCCESS')
-                        await gh.post(comment_url, data={"body": message})
-                    else:
-                        for i in range(len(comment_list)):
-                            comment_sender = comment_list[i]['user']['login']
-                            comment_body = comment_list[i]['body']
-                            update_url = comment_list[i]['url']
-                            if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
-                                    '🕵️'):
-                                update_message = localConfig.cf.get(
-                                    repo, 'STATUS_CI_SUCCESS')
-                                await gh.patch(
-                                    update_url, data={"body": update_message})
-                            else:
-                                message = localConfig.cf.get(
-                                    repo, 'STATUS_CI_SUCCESS')
-                                await gh.post(
-                                    comment_url, data={"body": message})
-                elif combined_ci_status == 'failure':
-                    for i in range(len(comment_list)):
-                        comment_sender = comment_list[i]['user']['login']
-                        comment_body = comment_list[i]['body']
-                        update_url = comment_list[i]['url']
-                        if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
-                                '🕵️'):
-                            latest_comment = comment_list[i]
-                            latest_body = latest_comment['body']
-                            split_body = latest_body.split("\r\n")
-                            if ci_link.startswith('https://xly.bce.baidu.com'):
-                                corrected_ci = xly_template + failed_ci_hyperlink
-                                if corrected_ci in split_body:
-                                    update_message = re.sub(
-                                        "\r\n" + corrected_ci, '', latest_body)
-                                    await gh.patch(
-                                        update_url,
-                                        data={"body": update_message})
-                            else:
-                                corrected_ci = tc_template % context
-                                if corrected_ci in split_body:
-                                    update_message = re.sub(
-                                        "\r\n" + corrected_ci, '', latest_body)
-                                    await gh.patch(
-                                        update_url,
-                                        data={"body": update_message})
-            else:
-                if comment_list == '[]':
-                    if ci_link.startswith('https://xly.bce.baidu.com'):
-                        error_message = failed_template % str(
-                            shortId) + xly_template + failed_ci_hyperlink
-                        await gh.post(
-                            comment_url, data={"body": error_message})
-                    else:
-                        error_message = failed_template % str(
-                            shortId) + tc_template % context
-                        await gh.post(
-                            comment_url, data={"body": error_message})
+        if state in ['failure', 'error']:
+            if len(comment_list) == 0:
+                if ci_link.startswith('https://xly.bce.baidu.com'):
+                    error_message = failed_header + failed_template % str(
+                        shortId) + failed_ci_bullet % failed_ci_hyperlink
+                    await gh.post(comment_url, data={"body": error_message})
                 else:
-                    for i in range(len(comment_list)):
-                        comment_sender = comment_list[i]['user']['login']
-                        comment_body = comment_list[i]['body']
-                        if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
-                                '🕵️'):
-                            latest_comment = comment_list[i]
-                            latest_body = latest_comment['body']
-                            update_url = latest_comment['url']
-                            if ci_link.startswith('https://xly.bce.baidu.com'):
-                                update_message = latest_body + "\r\n" + xly_template + failed_ci_hyperlink
+                    error_message = failed_header + failed_template % str(shortId) + failed_ci_bullet % context
+                    await gh.post(comment_url, data={"body": error_message})
+            else:
+                for i in range(len(comment_list)):
+                    comment_sender = comment_list[i]['user']['login']
+                    comment_body = comment_list[i]['body']
+                    update_url = comment_list[i]['url']
+                    if comment_sender == "paddle-bot[bot]" and comment_body.startswith('## 🕵️'):
+                        if ci_link.startswith('https://xly.bce.baidu.com'):
+                            update_message = comment_body + "\r\n" + failed_ci_bullet % failed_ci_hyperlink
+                            await gh.patch(update_url, data={"body": update_message})
+                        else:
+                            update_message = comment_body + "\r\n" + failed_ci_bullet % context
+                            await gh.patch(
+                                update_url, data={"body": update_message})
+                    elif comment_sender == "paddle-bot[bot]" and comment_body.startswith(
+                            '✅'):
+                        if ci_link.startswith('https://xly.bce.baidu.com'):
+                            update_message = failed_header + failed_template % str(
+                                shortId) + failed_ci_bullet % failed_ci_hyperlink
+                            await gh.patch(update_url, data={"body": update_message})
+                        else:
+                            update_message = failed_header + failed_template % str(
+                                shortId) + failed_ci_bullet % context
+                            await gh.patch(
+                                update_url, data={"body": update_message})
+
+@router.register("status")
+async def update_ci_failure_summary(event, gh, repo, *args, **kwargs):
+    """update comment based on ci status"""
+    if repo in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark']:
+        state = event.data['state']
+        context = event.data['context']
+        comment_url = event.data["commit"]["comments_url"]
+        commit_url = event.data["commit"]["url"]
+        combined_statuses_url = commit_url + "/status"
+        ci_link = event.data['target_url']
+        failed_ci_bullet = "- <b>Failed: %s</b>"
+        comment_list = checkComments(comment_url)
+        combined_ci_status = checkCIState(combined_statuses_url)
+        if state == 'success' and combined_ci_status == 'failure':
+            for i in range(len(comment_list)):
+                comment_sender = comment_list[i]['user']['login']
+                comment_body = comment_list[i]['body']
+                update_url = comment_list[i]['url']
+                if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
+                        '## 🕵️'):
+                    split_body = comment_body.split("\r\n")
+                    if ci_link.startswith('https://xly.bce.baidu.com'):
+                        for j in range(2, len(split_body)):
+                            if re.findall(context, split_body[i]):
+                                update_message = comment_body.replace("\r\n" + split_body[i], '')
                                 await gh.patch(
-                                    update_url, data={"body": update_message})
-                            else:
-                                update_message = latest_body + "\r\n" + tc_template % context
-                                await gh.patch(
-                                    update_url, data={"body": update_message})
+                                    update_url,
+                                    data={"body": update_message})
+                    else:
+                        corrected_ci = failed_ci_bullet % context
+                        if corrected_ci in split_body:
+                            update_message = comment_body.replace("\r\n" + corrected_ci, '')
+                            await gh.patch(
+                                update_url, data={"body": update_message})
