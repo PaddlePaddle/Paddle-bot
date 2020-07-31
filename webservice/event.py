@@ -250,16 +250,16 @@ async def check_merge_availability(event, gh, repo, *args, **kwargs):
                     comment_sender = comment_list[i]['user']['login']
                     comment_body = comment_list[i]['body']
                     update_url = comment_list[i]['url']
-                    if comment_sender == "paddle-bot[bot]" and comment_body.startswith('## 🕵️'):
+                    if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
+                            '## 🕵️'):
                         update_message = localConfig.cf.get(
                             repo, 'STATUS_CI_SUCCESS')
                         await gh.patch(
                             update_url, data={"body": update_message})
                     else:
-                        message = localConfig.cf.get(
-                            repo, 'STATUS_CI_SUCCESS')
-                        await gh.post(
-                            comment_url, data={"body": message})
+                        message = localConfig.cf.get(repo, 'STATUS_CI_SUCCESS')
+                        await gh.post(comment_url, data={"body": message})
+
 
 @router.register("status")
 async def check_ci_failure(event, gh, repo, *args, **kwargs):
@@ -285,17 +285,20 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
                         shortId) + failed_ci_bullet % failed_ci_hyperlink
                     await gh.post(comment_url, data={"body": error_message})
                 else:
-                    error_message = failed_header + failed_template % str(shortId) + failed_ci_bullet % context
+                    error_message = failed_header + failed_template % str(
+                        shortId) + failed_ci_bullet % context
                     await gh.post(comment_url, data={"body": error_message})
             else:
                 for i in range(len(comment_list)):
                     comment_sender = comment_list[i]['user']['login']
                     comment_body = comment_list[i]['body']
                     update_url = comment_list[i]['url']
-                    if comment_sender == "paddle-bot[bot]" and comment_body.startswith('## 🕵️'):
+                    if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
+                            '## 🕵️'):
                         if ci_link.startswith('https://xly.bce.baidu.com'):
                             update_message = comment_body + "\r\n" + failed_ci_bullet % failed_ci_hyperlink
-                            await gh.patch(update_url, data={"body": update_message})
+                            await gh.patch(
+                                update_url, data={"body": update_message})
                         else:
                             update_message = comment_body + "\r\n" + failed_ci_bullet % context
                             await gh.patch(
@@ -304,13 +307,16 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
                             '✅'):
                         if ci_link.startswith('https://xly.bce.baidu.com'):
                             update_message = failed_header + failed_template % str(
-                                shortId) + failed_ci_bullet % failed_ci_hyperlink
-                            await gh.patch(update_url, data={"body": update_message})
+                                shortId
+                            ) + failed_ci_bullet % failed_ci_hyperlink
+                            await gh.patch(
+                                update_url, data={"body": update_message})
                         else:
                             update_message = failed_header + failed_template % str(
                                 shortId) + failed_ci_bullet % context
                             await gh.patch(
                                 update_url, data={"body": update_message})
+
 
 @router.register("status")
 async def update_ci_failure_summary(event, gh, repo, *args, **kwargs):
@@ -336,13 +342,14 @@ async def update_ci_failure_summary(event, gh, repo, *args, **kwargs):
                     if ci_link.startswith('https://xly.bce.baidu.com'):
                         for j in range(2, len(split_body)):
                             if re.findall(context, split_body[i]):
-                                update_message = comment_body.replace("\r\n" + split_body[i], '')
+                                update_message = comment_body.replace(
+                                    "\r\n" + split_body[i], '')
                                 await gh.patch(
-                                    update_url,
-                                    data={"body": update_message})
+                                    update_url, data={"body": update_message})
                     else:
                         corrected_ci = failed_ci_bullet % context
                         if corrected_ci in split_body:
-                            update_message = comment_body.replace("\r\n" + corrected_ci, '')
+                            update_message = comment_body.replace(
+                                "\r\n" + corrected_ci, '')
                             await gh.patch(
                                 update_url, data={"body": update_message})
