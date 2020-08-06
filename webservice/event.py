@@ -311,9 +311,9 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                 split_body = comment_body.split("\r\n")
                 if ci_link.startswith('https://xly.bce.baidu.com'):
                     for j in range(2, len(split_body)):
-                        if re.findall(context, split_body[i]):
+                        if context in split_body[j]:
                             latest_body = comment_body.replace(
-                                "\r\n" + split_body[i], '')
+                                "\r\n" + split_body[j], '')
                             update_message = latest_body + "\r\n" + failed_ci_bullet % failed_ci_hyperlink
                             logger.info(
                                 "Successful trigger logic for ADDING XLY bullet"
@@ -368,9 +368,9 @@ async def update_ci_failure_summary(gh, context, ci_link, comment_list):
             split_body = comment_body.split("\r\n")
             if ci_link.startswith('https://xly.bce.baidu.com'):
                 for j in range(2, len(split_body)):
-                    if re.findall(context, split_body[i]):
+                    if context in split_body[j]:
                         update_message = comment_body.replace(
-                            "\r\n" + split_body[i], '')
+                            "\r\n" + split_body[j], '')
                         logger.info(
                             "Successful trigger logic for ERASE corrected XLY bullet"
                         )
