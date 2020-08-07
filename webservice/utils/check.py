@@ -87,6 +87,23 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
     return res, message
 
 
+def checkCIState(combined_statuses_url):
+    response = requests.get(combined_statuses_url).json()
+    combined_ci_status = response['state']
+    return combined_ci_status
+
+
 def checkComments(url):
     response = requests.get(url).json()
     return response
+
+
+def checkRequired(combined_statuses_url, required_ci_list):
+    response = requests.get(combined_statuses_url).json()
+    ci_list = response['statuses']
+    required_all_passed = True
+    for i in range(len(ci_list)):
+        if ci_list[i]['state'] != 'success' and ci_list[i][
+                'context'] in required_ci_list:
+            required_all_passed = False
+    return required_all_passed
