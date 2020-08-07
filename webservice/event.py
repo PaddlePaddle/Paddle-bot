@@ -245,41 +245,54 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
         commitId = event.data['sha']
         shortId = commitId[0:7]
         required_ci_list = localConfig.cf.get(repo, 'REQUIRED_CI')
-        comment_list = checkComments(comment_url)
-        combined_ci_status = checkCIState(combined_statuses_url)
-        if state in ['success', 'failure', 'error']:
-            if state == 'success':
-                required_all_passed = checkRequired(combined_statuses_url,
-                                                    required_ci_list)
-                if combined_ci_status != 'success':
-                    await update_ci_failure_summary(gh, context, ci_link,
-                                                    comment_list)
-                if combined_ci_status == 'success' or required_all_passed is True:
-                    if len(comment_list) == 0:
-                        message = localConfig.cf.get(repo, 'STATUS_CI_SUCCESS')
-                        logger.info(
-                            "Successful trigger logic for CREATE success comment"
-                        )
-                        await gh.post(comment_url, data={"body": message})
-                    else:
-                        for i in range(len(comment_list)):
-                            comment_sender = comment_list[i]['user']['login']
-                            comment_body = comment_list[i]['body']
-                            update_url = comment_list[i]['url']
-                            if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
-                                    '## 🕵️'):
-                                update_message = localConfig.cf.get(
-                                    repo, 'STATUS_CI_SUCCESS')
-                                logger.info(
-                                    "Successful trigger logic for CORRECT failed comment"
-                                )
-                                await gh.delete(update_url)
-                                await gh.post(
-                                    comment_url,
-                                    data={"body": update_message})
-            else:
-                await create_add_ci_failure_summary(
-                    gh, context, comment_url, ci_link, shortId, comment_list)
+        sender = event.data['commit']['author']['login']
+        if sender in [
+                'lelelelelez', 'randytli', 'lanxianghit', 'zhiqiu', 'chenwhql',
+                'GaoWei8', 'gfwm2013', 'phlrain', 'Xreki', 'liym27', 'luotao1',
+                'pangyoki', 'tianshuo78520a', 'iducn3', 'feng626',
+                'wangchaochaohu', 'wanghuancoder', 'wzzju', 'joejiong',
+                'Aurelius84', 'zhangting2020', 'zhhsplendid', 'zhouwei25'
+        ]:
+            comment_list = checkComments(comment_url)
+            logger.info("combined_statuses_url: %s; ci_link: %s ;" %
+                        (combined_statuses_url, ci_link))
+            combined_ci_status = checkCIState(combined_statuses_url)
+            if state in ['success', 'failure', 'error']:
+                if state == 'success':
+                    if combined_ci_status != 'success':
+                        await update_ci_failure_summary(gh, context, ci_link,
+                                                        comment_list)
+                    required_all_passed = checkRequired(combined_statuses_url,
+                                                        required_ci_list)
+                    if combined_ci_status == 'success' or required_all_passed is True:
+                        if len(comment_list) == 0:
+                            message = localConfig.cf.get(repo,
+                                                         'STATUS_CI_SUCCESS')
+                            logger.info(
+                                "Successful trigger logic for CREATE success comment"
+                            )
+                            await gh.post(comment_url, data={"body": message})
+                        else:
+                            for i in range(len(comment_list)):
+                                comment_sender = comment_list[i]['user'][
+                                    'login']
+                                comment_body = comment_list[i]['body']
+                                update_url = comment_list[i]['url']
+                                if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
+                                        '## 🕵️'):
+                                    update_message = localConfig.cf.get(
+                                        repo, 'STATUS_CI_SUCCESS')
+                                    logger.info(
+                                        "Successful trigger logic for CORRECT failed comment"
+                                    )
+                                    await gh.delete(update_url)
+                                    await gh.post(
+                                        comment_url,
+                                        data={"body": update_message})
+                else:
+                    await create_add_ci_failure_summary(gh, context,
+                                                        comment_url, ci_link,
+                                                        shortId, comment_list)
 
 
 async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
@@ -302,6 +315,7 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
             logger.info("Successful trigger logic for CREATE TC bullet")
             await gh.post(comment_url, data={"body": error_message})
     else:
+        logger.info("comment_list: %s" % comment_list)
         for i in range(len(comment_list)):
             comment_sender = comment_list[i]['user']['login']
             comment_body = comment_list[i]['body']
@@ -309,24 +323,26 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
             if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
                     '## 🕵️'):
                 split_body = comment_body.split("\r\n")
+                logger.info("split_body: %s" % split_body)
                 if ci_link.startswith('https://xly.bce.baidu.com'):
-                    for j in range(1, len(split_body)):
+                    IsExit = True
+                    for j in range(len(split_body)):
+                        logger.info("context:%s" % context)
                         if context in split_body[j]:
+                            IsExit = False
                             latest_body = comment_body.replace(
                                 "\r\n" + split_body[j], '')
                             update_message = latest_body + "\r\n" + failed_ci_bullet % failed_ci_hyperlink
-                            logger.info(
-                                "Successful trigger logic for replace-ADDING XLY bullet"
-                            )
-                            await gh.patch(
-                                update_url, data={"body": update_message})
-                        else:
-                            update_message = comment_body + "\r\n" + failed_ci_bullet % failed_ci_hyperlink
                             logger.info(
                                 "Successful trigger logic for ADDING XLY bullet"
                             )
                             await gh.patch(
                                 update_url, data={"body": update_message})
+                    if IsExit is True:
+                        update_message = comment_body + "\r\n" + failed_ci_bullet % failed_ci_hyperlink
+                        logger.info("update_message: %s" % update_message)
+                        await gh.patch(
+                            update_url, data={"body": update_message})
                 else:
                     corrected_ci = failed_ci_bullet % context
                     if corrected_ci in split_body:
@@ -334,13 +350,11 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                             "\r\n" + corrected_ci, '')
                         update_message = latest_body + "\r\n" + failed_ci_bullet % context
                         logger.info(
-                            "Successful trigger logic for replace-ADDING TC bullet")
+                            "Successful trigger logic for ADDING TC bullet")
                         await gh.patch(
                             update_url, data={"body": update_message})
                     else:
                         update_message = comment_body + "\r\n" + failed_ci_bullet % context
-                        logger.info(
-                            "Successful trigger logic for ADDING TC bullet")
                         await gh.patch(
                             update_url, data={"body": update_message})
             elif comment_sender == "paddle-bot[bot]" and comment_body.startswith(
@@ -372,7 +386,7 @@ async def update_ci_failure_summary(gh, context, ci_link, comment_list):
                 '## 🕵️'):
             split_body = comment_body.split("\r\n")
             if ci_link.startswith('https://xly.bce.baidu.com'):
-                for j in range(1, len(split_body)):
+                for j in range(len(split_body)):
                     if context in split_body[j]:
                         update_message = comment_body.replace(
                             "\r\n" + split_body[j], '')
