@@ -87,10 +87,10 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
     return res, message
 
 
-def checkCIState(combined_statuses_url):
-    response = requests.get(combined_statuses_url).json()
-    combined_ci_status = response['state']
-    return combined_ci_status
+# def checkCIState(combined_statuses_url):
+#     response = requests.get(combined_statuses_url).json()
+#     combined_ci_status = response['state']
+#     return combined_ci_status
 
 
 def checkComments(url):
@@ -98,16 +98,32 @@ def checkComments(url):
     return response
 
 
-def checkRequired(combined_statuses_url, required_ci_list):
-    response = requests.get(combined_statuses_url).json()
-    ci_list = response['statuses']
+# def checkRequired(combined_statuses_url, required_ci_list):
+#     response = requests.get(combined_statuses_url).json()
+#     ci_list = response['statuses']
+#     required_all_passed = True
+#     for i in range(len(ci_list)):
+#         if ci_list[i]['state'] != 'success' and ci_list[i][
+#                 'context'] in required_ci_list:
+#             required_all_passed = False
+#     return required_all_passed
+
+
+def checkRequired(ci_list, required_ci_list):
     required_all_passed = True
     for i in range(len(ci_list)):
-        if ci_list[i]['state'] != 'success' and ci_list[i][
-                'context'] in required_ci_list:
+        if ci_list[i]['state'] != 'success' and ci_list[i]['context'] in required_ci_list:
             required_all_passed = False
     return required_all_passed
 
+async def checkCIState(combined_statuses_url, required_ci_list):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(combined_statuses_url) as resp:
+            response = await resp.json()
+            combined_ci_status = response['state']
+            ci_list = response['statuses']
+            required_all_passed = checkRequired(ci_list, required_ci_list)
+    return combined_ci_status, required_all_passed
 
 def checkPRnum(url):
     response = requests.get(url).json()

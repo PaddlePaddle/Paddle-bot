@@ -259,14 +259,14 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
             comment_list = checkComments(comment_url)
             pr_num = checkPRnum(pr_search_url)
             logger.info("pr num: %s" % pr_num)
-            combined_ci_status = checkCIState(combined_statuses_url)
+            combined_ci_status, required_all_passed  =  await checkCIState(combined_statuses_url, required_ci_list)
             if state in ['success', 'failure', 'error']:
                 if state == 'success':
                     if combined_ci_status != 'success':
                         await update_ci_failure_summary(gh, context, ci_link,
                                                         comment_list, pr_num)
-                    required_all_passed = checkRequired(combined_statuses_url,
-                                                        required_ci_list)
+                    # required_all_passed = checkRequired(combined_statuses_url,
+                    #                                     required_ci_list)
                     if combined_ci_status == 'success' or required_all_passed is True:
                         if len(comment_list) == 0:
                             message = localConfig.cf.get(repo,
