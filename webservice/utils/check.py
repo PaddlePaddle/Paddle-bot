@@ -107,3 +107,9 @@ def checkRequired(combined_statuses_url, required_ci_list):
                 'context'] in required_ci_list:
             required_all_passed = False
     return required_all_passed
+
+
+def checkPRnum(url):
+    response = requests.get(url).json()
+    pr_num = response['items'][0]['number']
+    return pr_num
