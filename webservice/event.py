@@ -1,5 +1,5 @@
 from gidgethub import routing
-from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, checkRequired
+from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, getPRnum
 from utils.readConfig import ReadConfig
 from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist
 from utils.db import Database
@@ -241,9 +241,12 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
         commit_url = event.data["commit"]["url"]
         combined_statuses_url = commit_url + "/status"
         comment_url = event.data["commit"]["comments_url"]
+        parent_url = event.data['commit']['parents'][0]['url']
+        parent_comment_url = parent_url + "/comments"
         ci_link = event.data['target_url']
         commitId = event.data['sha']
         shortId = commitId[0:7]
+        pr_search_url = "https://api.github.com/search/issues?q=sha:" + commitId
         required_ci_list = localConfig.cf.get(repo, 'REQUIRED_CI')
         sender = event.data['commit']['author']['login']
         if sender in [
@@ -254,24 +257,25 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
                 'Aurelius84', 'zhangting2020', 'zhhsplendid', 'zhouwei25'
         ]:
             comment_list = checkComments(comment_url)
-            logger.info("combined_statuses_url: %s; ci_link: %s ;" %
-                        (combined_statuses_url, ci_link))
-            combined_ci_status = checkCIState(combined_statuses_url)
+            pr_num = checkPRnum(pr_search_url)
+            logger.info("pr num: %s" % pr_num)
+            combined_ci_status, required_all_passed = await checkCIState(
+                combined_statuses_url, required_ci_list)
             if state in ['success', 'failure', 'error']:
                 if state == 'success':
                     if combined_ci_status != 'success':
                         await update_ci_failure_summary(gh, context, ci_link,
-                                                        comment_list)
-                    required_all_passed = checkRequired(combined_statuses_url,
-                                                        required_ci_list)
+                                                        comment_list, pr_num)
                     if combined_ci_status == 'success' or required_all_passed is True:
                         if len(comment_list) == 0:
                             message = localConfig.cf.get(repo,
                                                          'STATUS_CI_SUCCESS')
                             logger.info(
-                                "Successful trigger logic for CREATE success comment"
-                            )
+                                "Successful trigger logic for CREATE success comment. pr num: %s"
+                                % pr_num)
                             await gh.post(comment_url, data={"body": message})
+                            await clean_parent_comment_list(
+                                gh, parent_comment_url, pr_num)
                         else:
                             for i in range(len(comment_list)):
                                 comment_sender = comment_list[i]['user'][
@@ -283,20 +287,21 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
                                     update_message = localConfig.cf.get(
                                         repo, 'STATUS_CI_SUCCESS')
                                     logger.info(
-                                        "Successful trigger logic for CORRECT failed comment"
-                                    )
+                                        "Successful trigger logic for CORRECT failed comment. pr num: %s"
+                                        % pr_num)
                                     await gh.delete(update_url)
                                     await gh.post(
                                         comment_url,
                                         data={"body": update_message})
                 else:
-                    await create_add_ci_failure_summary(gh, context,
-                                                        comment_url, ci_link,
-                                                        shortId, comment_list)
+                    await create_add_ci_failure_summary(
+                        gh, context, comment_url, ci_link, shortId, pr_num,
+                        comment_list, parent_comment_url)
 
 
 async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
-                                        shortId, comment_list):
+                                        shortId, pr_num, comment_list,
+                                        parent_comment_url):
     """gradually find failed CI"""
     hyperlink_format = '<a href="{link}">{text}</a>'
     failed_header = "## 🕵️ CI failures summary\r\n"
@@ -307,13 +312,19 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
         if ci_link.startswith('https://xly.bce.baidu.com'):
             error_message = failed_header + failed_template % str(
                 shortId) + failed_ci_bullet % failed_ci_hyperlink
-            logger.info("Successful trigger logic for CREATE XLY bullet")
+            logger.info(
+                "Successful trigger logic for CREATE XLY bullet. pr num: %s" %
+                pr_num)
             await gh.post(comment_url, data={"body": error_message})
+            await clean_parent_comment_list(gh, parent_comment_url, pr_num)
         else:
             error_message = failed_header + failed_template % str(
                 shortId) + failed_ci_bullet % context
-            logger.info("Successful trigger logic for CREATE TC bullet")
+            logger.info(
+                "Successful trigger logic for CREATE TC bullet. pr num: %s" %
+                pr_num)
             await gh.post(comment_url, data={"body": error_message})
+            await clean_parent_comment_list(gh, parent_comment_url, pr_num)
     else:
         logger.info("comment_list: %s" % comment_list)
         for i in range(len(comment_list)):
@@ -334,8 +345,8 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                                 "\r\n" + split_body[j], '')
                             update_message = latest_body + "\r\n" + failed_ci_bullet % failed_ci_hyperlink
                             logger.info(
-                                "Successful trigger logic for ADDING XLY bullet"
-                            )
+                                "Successful trigger logic for ADDING XLY bullet. pr num: %s"
+                                % pr_num)
                             await gh.patch(
                                 update_url, data={"body": update_message})
                     if IsExit is True:
@@ -350,7 +361,8 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                             "\r\n" + corrected_ci, '')
                         update_message = latest_body + "\r\n" + failed_ci_bullet % context
                         logger.info(
-                            "Successful trigger logic for ADDING TC bullet")
+                            "Successful trigger logic for ADDING TC bullet. pr num: %s"
+                            % pr_num)
                         await gh.patch(
                             update_url, data={"body": update_message})
                     else:
@@ -358,24 +370,25 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                         await gh.patch(
                             update_url, data={"body": update_message})
             elif comment_sender == "paddle-bot[bot]" and comment_body.startswith(
-                    '✅'):
+                    '✅️'):
                 if ci_link.startswith('https://xly.bce.baidu.com'):
                     update_message = failed_header + failed_template % str(
                         shortId) + failed_ci_bullet % failed_ci_hyperlink
                     logger.info(
-                        "Successful trigger logic for CHANGE Success Comment to XLY bullet"
-                    )
+                        "Successful trigger logic for CHANGE Success Comment to XLY bullet. pr num: %s"
+                        % pr_num)
                     await gh.patch(update_url, data={"body": update_message})
                 else:
                     update_message = failed_header + failed_template % str(
                         shortId) + failed_ci_bullet % context
                     logger.info(
-                        "Successful trigger logic for CHANGE Success Comment to TC bullet"
-                    )
+                        "Successful trigger logic for CHANGE Success Comment to TC bullet. pr num: %s"
+                        % pr_num)
                     await gh.patch(update_url, data={"body": update_message})
 
 
-async def update_ci_failure_summary(gh, context, ci_link, comment_list):
+async def update_ci_failure_summary(gh, context, ci_link, comment_list,
+                                    pr_num):
     """erase corrected CI"""
     failed_ci_bullet = "- <b>Failed: %s</b>"
     for i in range(len(comment_list)):
@@ -390,17 +403,50 @@ async def update_ci_failure_summary(gh, context, ci_link, comment_list):
                     if context in split_body[j]:
                         update_message = comment_body.replace(
                             "\r\n" + split_body[j], '')
-                        logger.info(
-                            "Successful trigger logic for ERASE corrected XLY bullet"
-                        )
-                        await gh.patch(
-                            update_url, data={"body": update_message})
+                        curr_split_body = update_message.split("\r\n")
+                        if len(curr_split_body) > 2:
+                            logger.info(
+                                "Successful trigger logic for ERASE corrected XLY bullet. pr num: %s"
+                                % pr_num)
+                            await gh.patch(
+                                update_url, data={"body": update_message})
+                        else:
+                            logger.info(
+                                "ERASE ALL comment as NO bullet left after erase last XLY bullet. pr num: %s"
+                                % pr_num)
+                            await gh.delete(update_url)
             else:
                 corrected_ci = failed_ci_bullet % context
                 if corrected_ci in split_body:
                     update_message = comment_body.replace(
                         "\r\n" + corrected_ci, '')
-                    logger.info(
-                        "Successful trigger logic for ERASE corrected TC bullet"
-                    )
-                    await gh.patch(update_url, data={"body": update_message})
+                    curr_split_body = update_message.split("\r\n")
+                    if len(curr_split_body) > 2:
+                        logger.info(
+                            "Successful trigger logic for ERASE corrected TC bullet. pr num: %s"
+                            % pr_num)
+                        await gh.patch(
+                            update_url, data={"body": update_message})
+                    else:
+                        logger.info(
+                            "ERASE ALL comment as NO bullet left after erase last TC bullet. pr num: %s"
+                            % pr_num)
+                        await gh.delete(update_url)
+
+
+async def clean_parent_comment_list(gh, url, pr_num):
+    parent_comment_list = checkComments(url)
+    if len(parent_comment_list) != 0:
+        count = 0
+        for i in range(len(parent_comment_list)):
+            parent_comment_sender = parent_comment_list[i]['user']['login']
+            if parent_comment_sender == "paddle-bot[bot]":
+                delete_url = parent_comment_list[i]['url']
+                count += 1
+                logger.info(
+                    "REMOVE: %s comment(s) from parent commit; sender: %s; pr num: %s"
+                    % (count, parent_comment_sender, pr_num))
+                await gh.delete(delete_url)
+            else:
+                logger.info("Comment from User: %s, stop cleaning." %
+                            parent_comment_sender)
