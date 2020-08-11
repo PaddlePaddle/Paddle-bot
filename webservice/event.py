@@ -377,14 +377,16 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                     logger.info(
                         "Successful trigger logic for CHANGE Success Comment to XLY bullet. pr num: %s"
                         % pr_num)
-                    await gh.patch(update_url, data={"body": update_message})
+                    await gh.delete(update_url)
+                    await gh.post(comment_url, data={"body": update_message})
                 else:
                     update_message = failed_header + failed_template % str(
                         shortId) + failed_ci_bullet % context
                     logger.info(
                         "Successful trigger logic for CHANGE Success Comment to TC bullet. pr num: %s"
                         % pr_num)
-                    await gh.patch(update_url, data={"body": update_message})
+                    await gh.delete(update_url)
+                    await gh.post(comment_url, data={"body": update_message})
 
 
 async def update_ci_failure_summary(gh, context, ci_link, comment_list,
