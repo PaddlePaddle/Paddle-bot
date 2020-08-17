@@ -1,5 +1,8 @@
 import requests
 import re
+import aiohttp
+from utils.auth_ipipe import Get_ipipe_auth
+from utils.analyze_buildLog import get_stageUrl
 
 
 def checkPRNotCI(commit_url, sha):
@@ -115,3 +118,20 @@ def getPRnum(url):
     response = requests.get(url).json()
     pr_num = response['items'][0]['number']
     return pr_num
+
+
+def ifCancelXly(target_url):
+    ifCancel = False
+    if target_url.startswith('https://xly.bce.baidu.com'):
+        stage_url = get_stageUrl(target_url)
+        session, req = Get_ipipe_auth(stage_url)
+        try:
+            res = session.send(req).json()
+        except Exception as e:
+            logger.error('error: %s' % e)
+            print("Error: %s" % e)
+        else:
+            status = res['pipelineBuildBean']['pipelineStatusFromStages']
+        if status == 'CANCEL':
+            ifCancel = True
+    return ifCancel
