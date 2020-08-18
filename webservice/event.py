@@ -336,17 +336,15 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
             if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
                     '## 🕵️'):
                 split_body = comment_body.split("\r\n")
-                context_list = re.findall(context, comment_body)
+                context_list = re.findall(r"\">(.+?)</a></b>", comment_body)
                 if ci_link.startswith('https://xly.bce.baidu.com'):
                     IsExit = True
-                    # for j in range(len(split_body)):
                     for j in range(len(context_list)):
                         logger.info("context:%s" % context)
-                        # if context in split_body[j]:
                         if context == context_list[j]:
                             IsExit = False
                             latest_body = comment_body.replace(
-                                "\r\n" + split_body[j+2], '')
+                                "\r\n" + split_body[j + 2], '')
                             update_message = latest_body + "\r\n" + failed_ci_bullet % failed_ci_hyperlink
                             logger.info(
                                 "Successful trigger logic for REMOVING and ADDING XLY bullet. pr num: %s; sha: %s"
@@ -407,13 +405,12 @@ async def update_ci_failure_summary(gh, context, ci_link, comment_list,
         if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
                 '## 🕵️'):
             split_body = comment_body.split("\r\n")
-            context_list = re.findall(context, comment_body)
+            context_list = re.findall(r"\">(.+?)</a></b>", comment_body)
             if ci_link.startswith('https://xly.bce.baidu.com'):
                 for j in range(len(context_list)):
-                    # if context in split_body[j]:
                     if context == context_list[j]:
                         update_message = comment_body.replace(
-                            "\r\n" + split_body[j+2], '')
+                            "\r\n" + split_body[j + 2], '')
                         curr_split_body = update_message.split("\r\n")
                         if len(curr_split_body) > 2:
                             logger.info(
