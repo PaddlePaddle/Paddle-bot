@@ -1,5 +1,5 @@
 from gidgethub import routing
-from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, getPRnum
+from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, getPRnum, getCommitComments
 from utils.readConfig import ReadConfig
 from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist
 from utils.db import Database
@@ -247,6 +247,7 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
         commitId = event.data['sha']
         shortId = commitId[0:7]
         pr_search_url = "https://api.github.com/search/issues?q=sha:" + commitId
+        commits_url = "https://api.github.com/repos/PaddlePaddle/Paddle/pulls/" + pr_num + "/commits"
         required_ci_list = localConfig.cf.get(repo, 'REQUIRED_CI')
         sender = event.data['commit']['author']['login']
         if sender in [
@@ -257,7 +258,7 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
                 'Aurelius84', 'zhangting2020', 'zhhsplendid', 'zhouwei25'
         ]:
             comment_list = checkComments(comment_url)
-            pr_num = checkPRnum(pr_search_url)
+            pr_num = getPRnum(pr_search_url)
             logger.info("pr num: %s" % pr_num)
             combined_ci_status, required_all_passed = await checkCIState(
                 combined_statuses_url, required_ci_list)
@@ -275,7 +276,7 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
                                 % (pr_num, shortId))
                             await gh.post(comment_url, data={"body": message})
                             await clean_parent_comment_list(
-                                gh, parent_comment_url, pr_num, shortId)
+                                gh, commits_url, pr_num, shortId)
                         else:
                             for i in range(len(comment_list)):
                                 comment_sender = comment_list[i]['user'][
@@ -316,7 +317,7 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                 "Successful trigger logic for CREATE XLY bullet. pr num: %s; sha: %s"
                 % (pr_num, shortId))
             await gh.post(comment_url, data={"body": error_message})
-            await clean_parent_comment_list(gh, parent_comment_url, pr_num,
+            await clean_parent_comment_list(gh, commits_url, pr_num,
                                             shortId)
         else:
             error_message = failed_header + failed_template % str(
@@ -325,7 +326,7 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                 "Successful trigger logic for CREATE TC bullet. pr num: %s; sha: %s"
                 % (pr_num, shortId))
             await gh.post(comment_url, data={"body": error_message})
-            await clean_parent_comment_list(gh, parent_comment_url, pr_num,
+            await clean_parent_comment_list(gh, commits_url, pr_num,
                                             shortId)
     else:
         logger.info("comment_list: %s" % comment_list)
@@ -442,19 +443,22 @@ async def update_ci_failure_summary(gh, context, ci_link, comment_list,
                         await gh.delete(update_url)
 
 
-async def clean_parent_comment_list(gh, url, pr_num, shortId):
-    parent_comment_list = checkComments(url)
-    if len(parent_comment_list) != 0:
-        count = 0
-        for i in range(len(parent_comment_list)):
-            parent_comment_sender = parent_comment_list[i]['user']['login']
-            if parent_comment_sender == "paddle-bot[bot]":
-                delete_url = parent_comment_list[i]['url']
-                count += 1
-                logger.info(
-                    "REMOVE: %s comment(s) from parent commit; sender: %s; pr num: %s; current sha: %s"
-                    % (count, parent_comment_sender, pr_num, shortId))
-                await gh.delete(delete_url)
-            else:
-                logger.info("Comment from User: %s, stop cleaning." %
-                            parent_comment_sender)
+async def clean_parent_comment_list(gh, commits_url, pr_num, shortId):
+    commits_comments_list = getCommitComments(commits_url)
+    if len(commits_comments_list) > 1:#pr中有大于一条commit再执行判断
+        for i in range(len(commits_comments_list)-1):#最新commit不需要清理
+            commit_comments_list = commits_comments_list[i]
+            if len(commit_comments_list) != 0:
+                count = 0
+                for j in range(len(commit_comments_list)):
+                    comment_sender = commit_comments_list[j]['user']['login']
+                    if comment_sender == "paddle-bot[bot]":
+                        delete_url = commit_comments_list[j]['url']
+                        count += 1
+                        logger.info(
+                            "REMOVE: %s comment(s) from parent commit; pr num: %s; current sha: %s"
+                            % (count, pr_num, shortId))
+                        await gh.delete(delete_url)
+                    else:
+                        logger.info("Comment from User: %s, stop cleaning." %
+                                    comment_sender)
