@@ -116,6 +116,7 @@ def getPRnum(url):
     pr_num = response['items'][0]['number']
     return pr_num
 
+
 def getCommitComments(url):
     response = requests.get(url).json()
     commits_comments_list = []
