@@ -1,5 +1,8 @@
 import requests
 import re
+import aiohttp
+from utils.auth_ipipe import Get_ipipe_auth
+from utils.analyze_buildLog import get_stageUrl
 
 
 def checkPRNotCI(commit_url, sha):
@@ -90,3 +93,55 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
 def checkComments(url):
     response = requests.get(url).json()
     return response
+
+
+def checkRequired(ci_list, required_ci_list):
+    required_all_passed = True
+    for i in range(len(ci_list)):
+        if ci_list[i]['state'] != 'success' and ci_list[i][
+                'context'] in required_ci_list:
+            required_all_passed = False
+    return required_all_passed
+
+
+async def checkCIState(combined_statuses_url, required_ci_list):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(combined_statuses_url) as resp:
+            response = await resp.json()
+            combined_ci_status = response['state']
+            ci_list = response['statuses']
+            required_all_passed = checkRequired(ci_list, required_ci_list)
+    return combined_ci_status, required_all_passed
+
+
+def getPRnum(url):
+    response = requests.get(url).json()
+    pr_num = response['items'][0]['number']
+    return pr_num
+
+
+def getCommitComments(url):
+    response = requests.get(url).json()
+    commits_comments_list = []
+    for i in range(len(response)):
+        commit_comments_url = response[i]['url'] + "/comments"
+        commit_comments = checkComments(commit_comments_url)
+        commits_comments_list.append(commit_comments)
+    return commits_comments_list
+
+
+def ifCancelXly(target_url):
+    ifCancel = False
+    if target_url.startswith('https://xly.bce.baidu.com'):
+        stage_url = get_stageUrl(target_url)
+        session, req = Get_ipipe_auth(stage_url)
+        try:
+            res = session.send(req).json()
+        except Exception as e:
+            logger.error('error: %s' % e)
+            print("Error: %s" % e)
+        else:
+            status = res['pipelineBuildBean']['pipelineStatusFromStages']
+        if status == 'CANCEL':
+            ifCancel = True
+    return ifCancel
