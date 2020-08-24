@@ -120,6 +120,16 @@ def getPRnum(url):
     return pr_num
 
 
+def getCommitComments(url):
+    response = requests.get(url).json()
+    commits_comments_list = []
+    for i in range(len(response)):
+        commit_comments_url = response[i]['url'] + "/comments"
+        commit_comments = checkComments(commit_comments_url)
+        commits_comments_list.append(commit_comments)
+    return commits_comments_list
+
+
 def ifCancelXly(target_url):
     ifCancel = False
     if target_url.startswith('https://xly.bce.baidu.com'):
