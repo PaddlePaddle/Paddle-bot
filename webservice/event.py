@@ -278,7 +278,7 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
             ]:
                 pr_num = getPRNum(pr_search_url)
                 commits_url = "https://api.github.com/repos/" + repo + "/pulls/" + str(
-                    pr_num) + "/commits"
+                    pr_num) + "/commits?per_page=250"
                 comment_list = checkComments(comment_url)
                 combined_ci_status, required_all_passed = await checkCIState(
                     combined_statuses_url, required_ci_list)
@@ -298,7 +298,7 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
                                 await gh.post(
                                     comment_url, data={"body": message})
                                 await clean_parent_comment_list(
-                                    gh, parent_comment_url, pr_num, shortId)
+                                    gh, commits_url, pr_num, shortId)
                             else:
                                 for i in range(len(comment_list)):
                                     comment_sender = comment_list[i]['user'][
@@ -319,7 +319,7 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
                     else:
                         await create_add_ci_failure_summary(
                             gh, context, comment_url, ci_link, shortId, pr_num,
-                            comment_list, parent_comment_url)
+                            comment_list, commits_url)
 
 
 async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
@@ -474,7 +474,7 @@ async def clean_parent_comment_list(gh, commits_url, pr_num, shortId):
                     comment_sender = commit_comments_list[j]['user']['login']
                     if comment_sender == "paddle-bot[bot]":
                         delete_url = commit_comments_list[j]['url']
-                        delete_sha = commit_comments_list[j]['commit_id']
+                        delete_sha = commit_comments_list[j]['commit_id'][0:7]
                         count += 1
                         logger.info(
                             "REMOVE: %s comment(s) from parent commit: %s; pr num: %s; current sha: %s"
