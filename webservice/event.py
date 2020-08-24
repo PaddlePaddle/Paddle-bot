@@ -474,10 +474,11 @@ async def clean_parent_comment_list(gh, commits_url, pr_num, shortId):
                     comment_sender = commit_comments_list[j]['user']['login']
                     if comment_sender == "paddle-bot[bot]":
                         delete_url = commit_comments_list[j]['url']
+                        delete_sha = commit_comments_list[j]['commit_id']
                         count += 1
                         logger.info(
-                            "REMOVE: %s comment(s) from parent commit; pr num: %s; current sha: %s"
-                            % (count, pr_num, shortId))
+                            "REMOVE: %s comment(s) from parent commit: %s; pr num: %s; current sha: %s"
+                            % (count, delete_sha, pr_num, shortId))
                         await gh.delete(delete_url)
                     else:
                         logger.info("Comment from User: %s, stop cleaning." %
