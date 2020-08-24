@@ -115,9 +115,14 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
                 if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
                         '✅'):
                     message = localConfig.cf.get(repo, 'NOT_USING_TEMPLATE')
-                    logger.error("%s Not Follow Template." % pr_num)
+                    logger.error("%s Not Follow Template, send notice." %
+                                 pr_num)
                     update_url = comment_list[i]['url']
                     await gh.patch(update_url, data={"body": message})
+                else:
+                    logger.error("%s Not Follow Template, and no comment." %
+                                 pr_num)
+                    await gh.post(url, data={"body": message})
     else:
         for i in range(len(comment_list)):
             comment_sender = comment_list[i]['user']['login']
