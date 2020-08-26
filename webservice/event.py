@@ -113,7 +113,7 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
                 comment_sender = comment_list[i]['user']['login']
                 comment_body = comment_list[i]['body']
                 if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
-                        '✅'):
+                        '✅ This PR\'s description meets'):
                     message = localConfig.cf.get(repo, 'NOT_USING_TEMPLATE')
                     logger.error("%s Not Follow Template, send notice." %
                                  pr_num)
