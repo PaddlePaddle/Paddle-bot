@@ -1,7 +1,7 @@
 from gidgethub import routing
 from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, getPRnum, ifCancelXly, getCommitComments
 from utils.readConfig import ReadConfig
-from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist
+from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist, generateCiTime
 from utils.db import Database
 from utils.convert import javaTimeTotimeStamp
 import time
@@ -28,32 +28,6 @@ async def create_check_run(sha, gh, repo):
 
 @router.register("pull_request", action="opened")
 @router.register("pull_request", action="synchronize")
-async def get_commitCreateTime(event, gh, repo, *args, **kwargs):
-    "Get commit CreateTime"
-    create_dict = {}
-    create_dict['repo'] = repo
-    pr_num = event.data['number']
-    sha = event.data["pull_request"]["head"]["sha"]
-    create_dict['PR'] = pr_num
-    create_dict['commitId'] = sha
-    if event.data['action'] == "opened":
-        CreateTime = event.data["pull_request"]["created_at"]
-    elif event.data['action'] == "synchronize":
-        CreateTime = event.data["pull_request"]["updated_at"]
-    createTime = javaTimeTotimeStamp(CreateTime)
-    create_dict['createTime'] = createTime
-    db = Database()
-    result = db.insert('commit_create_time', create_dict)
-    if result == True:
-        logger.info('%s %s insert commit_create_time success: %s!' %
-                    (pr_num, sha, createTime))
-    else:
-        logger.error('%s %s insert commit_create_time failed: %s!' %
-                     (pr_num, sha, createTime))
-
-
-@router.register("pull_request", action="opened")
-@router.register("pull_request", action="synchronize")
 async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     """Check if PR triggers CI"""
     pr_num = event.data['number']
@@ -63,7 +37,7 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
     base_branch = event.data["pull_request"]['base']['label']
     if repo not in [
             'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode'
+            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc'
     ]:
         repo = 'Others'
     if base_branch.startswith(
@@ -94,7 +68,7 @@ async def pull_request_event_template(event, gh, repo, *args, **kwargs):
     await create_check_run(sha, gh, repo)
     if repo not in [
             'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode'
+            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc'
     ]:
         repo = 'Others'
     CHECK_TEMPLATE = localConfig.cf.get(repo, 'CHECK_TEMPLATE')
@@ -131,7 +105,7 @@ async def running_check_run(event, gh, repo, *args, **kwargs):
         url, data=data, accept='application/vnd.github.antiope-preview+json')
     if repo not in [
             'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode'
+            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc'
     ]:
         repo = 'Others'
     if check_pr_template == False:
@@ -168,7 +142,7 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     sender = event.data["sender"]["login"]
     if repo not in [
             'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode'
+            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc'
     ]:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
@@ -183,7 +157,7 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     sender = event.data["sender"]["login"]
     if repo not in [
             'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode'
+            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc'
     ]:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
@@ -194,59 +168,59 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
 @router.register("status")
 async def check_ci_status(event, gh, repo, *args, **kwargs):
     """check_ci_status"""
-    if repo in ['PaddlePaddle/Paddle']:
-        status_dict = {}
-        state = event.data['state']
-        commitId = event.data['sha']
-        context = event.data['context']
-        branch = event.data['repository']['default_branch']
-        status_dict['branch'] = branch
-        status_dict['commitId'] = commitId
-        status_dict['ciName'] = context
-        if state in ['success', 'failure']:
-            commit_message = event.data['commit']['commit']['message']
-            target_url = event.data['target_url']
-            if target_url.startswith('https://xly.bce.baidu.com'):
-                ifCancel = ifCancelXly(target_url)
-                if ifCancel == True:
-                    logger.info("cancel xly: %s" % target_url)
+    status_dict = {}
+    state = event.data['state']
+    commitId = event.data['sha']
+    context = event.data['context']
+    branch = event.data['repository']['default_branch']
+    status_dict['commitId'] = commitId
+    status_dict['ciName'] = context
+    status_dict['repo'] = repo
+    if state in ['success', 'failure']:
+        commit_message = event.data['commit']['commit']['message']
+        target_url = event.data['target_url']
+        if target_url.startswith('https://xly.bce.baidu.com'):
+            ifCancel = ifCancelXly(target_url)
+            if ifCancel == True:
+                logger.info("cancel xly: %s" % target_url)
+            else:
+                document_fix = ifDocumentFix(commit_message)
+                if document_fix == True and context != "PR-CI-CPU-Py2":
+                    EXCODE = 0
                 else:
-                    document_fix = ifDocumentFix(commit_message)
-                    if document_fix == True and context != "PR-CI-CPU-Py2":
-                        EXCODE = 0
+                    index_dict = generateCiIndex(repo, commitId, target_url)
+                    logger.info("target_url: %s" % target_url)
+                    logger.info("index_dict: %s" % index_dict)
+                    EXCODE = index_dict['EXCODE']
+                    branch = index_dict['branch']
+                ifInsert = True
+                status_dict['branch'] = branch
+                status_dict['status'] = state
+                status_dict['documentfix'] = '%s' % document_fix
+                status_dict['EXCODE'] = EXCODE
+                insertTime = int(time.time())
+                query_stat = "SELECT * FROM paddle_ci_status WHERE ciName='%s' and commitId='%s' and status='%s' order by time desc" % (
+                    status_dict['ciName'], status_dict['commitId'],
+                    status_dict['status'])
+                queryTime = ifAlreadyExist(query_stat)
+                if queryTime != '':
+                    ifInsert = False if insertTime - queryTime < 30 else True
+                    logger.error("%s already insert!" % status_dict)
+                if ifInsert == True:
+                    time_dict = generateCiTime(target_url)
+                    for key in time_dict:
+                        status_dict[key] = time_dict[key]
+                    logger.info("status_dict: %s" % status_dict)
+                    db = Database()
+                    result = db.insert('paddle_ci_status', status_dict)
+                    if result == True:
+                        logger.info('%s %s insert paddle_ci_status success!' %
+                                    (context, commitId))
                     else:
-                        index_dict = generateCiIndex(repo, commitId,
-                                                     target_url)
-                        logger.info("target_url: %s" % target_url)
-                        logger.info("index_dict: %s" % index_dict)
-                        EXCODE = index_dict['EXCODE']
-                    ifInsert = True
-                    status_dict['status'] = state
-                    status_dict['documentfix'] = '%s' % document_fix
-                    status_dict['EXCODE'] = EXCODE
-                    insertTime = int(time.time())
-                    query_stat = "SELECT * FROM paddle_ci_status WHERE ciName='%s' and commitId='%s' and status='%s' order by time desc" % (
-                        status_dict['ciName'], status_dict['commitId'],
-                        status_dict['status'])
-                    queryTime = ifAlreadyExist(query_stat)
-                    if queryTime != '':
-                        ifInsert = False if insertTime - queryTime < 30 else True
-                        logger.error("%s already insert!" % status_dict)
-                    if ifInsert == True:
-                        time_dict = generateCiTime(target_url)
-                        for key in time_dict:
-                            status_dict[key] = time_dict[key]
-                        logger.info("status_dict: %s" % status_dict)
-                        db = Database()
-                        result = db.insert('paddle_ci_status', status_dict)
-                        if result == True:
-                            logger.info(
-                                '%s %s insert paddle_ci_status success!' %
-                                (context, commitId))
-                        else:
-                            logger.error(
-                                '%s %s insert paddle_ci_status failed!' %
-                                (context, commitId))
+                        logger.error('%s %s insert paddle_ci_status failed!' %
+                                     (context, commitId))
+        else:
+            logger.info(' %s ❎Not Support Teamcity CI!' % status_dict)
 
 
 @router.register("status")
