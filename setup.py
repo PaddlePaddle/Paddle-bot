@@ -106,7 +106,7 @@ else:
     os.environ['PACKAGE_NAME'] = "paddlebot"
 
 setup(
-    name='${PACKAGE_NAME}',
+    name='paddlebot',
     version='${PADDLEBOT_VERSION}',
     description='Parallel Distributed Deep Learning',
     url='https://github.com/PaddlePaddle/Paddle',
