@@ -302,7 +302,7 @@ async def create_add_ci_failure_summary(gh, context, repo, comment_url, ci_link,
     """gradually find failed CI"""
     hyperlink_format = '<a href="{link}">{text}</a>'
     pr_link = "https://github.com/PaddlePaddle/" + repo + "/pull/" + str(pr_num)
-    pr_hyperlink = hyperlink_format.format(link=pr_link, text="PR:"+str(pr_num))
+    pr_hyperlink = hyperlink_format.format(link=pr_link, text="PR:" + str(pr_num))
     failed_header = "## 🕵️ CI failures summary\r\n"
     failed_template = pr_hyperlink + "🔍 Commit ID: <b>%s</b> contains failed CI.\r\n"
     failed_ci_bullet = "- <b>Failed: %s</b>"
