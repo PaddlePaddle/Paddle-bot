@@ -292,12 +292,12 @@ async def check_ci_failure(event, gh, repo, *args, **kwargs):
                                             data={"body": update_message})
                     else:
                         await create_add_ci_failure_summary(
-                            gh, context, repo, comment_url, ci_link, shortId,
-                            pr_num, comment_list, commits_url)
+                            gh, context, comment_url, ci_link, shortId, pr_num,
+                            comment_list, commits_url)
 
 
-async def create_add_ci_failure_summary(gh, context, repo, comment_url,
-                                        ci_link, shortId, pr_num, comment_list,
+async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
+                                        shortId, pr_num, comment_list,
                                         commits_url):
     """gradually find failed CI"""
     hyperlink_format = '<a href="{link}">{text}</a>'
