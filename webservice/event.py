@@ -302,8 +302,8 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
     """gradually find failed CI"""
     hyperlink_format = '<a href="{link}">{text}</a>'
     failed_header = "## 🕵️ CI failures summary\r\n"
-    failed_template = "🔍 PR:#" + str(
-        pr_num) + "\tCommit ID: <b>%s</b> contains failed CI.\r\n"
+    failed_template = "🔍 PR: <b>#" + str(
+        pr_num) + "</b> Commit ID: <b>%s</b> contains failed CI.\r\n"
     failed_ci_bullet = "- <b>Failed: %s</b>"
     failed_ci_hyperlink = hyperlink_format.format(link=ci_link, text=context)
     if len(comment_list) == 0:
