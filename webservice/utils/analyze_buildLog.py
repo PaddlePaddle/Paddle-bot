@@ -81,7 +81,8 @@ def generateCiIndex(repo, sha, target_url):
                         logUrl = localConfig.cf.get('ipipeConf',
                                                     'log_url') + logParam
             getIpipeBuildLog(sha, pipelineConfName, logUrl)
-            index_dict_utl = get_index(index_dict, sha, pipelineConfName)
+            index_dict_utl = get_index(index_dict, sha, pipelineConfName,
+                                       target_url)
             os.remove("buildLog/%s_%s.log" % (pipelineConfName, sha))
     else:
         index_dict_utl = {}
@@ -170,7 +171,7 @@ def generateCiTime(target_url):
     return time_dict
 
 
-def get_index(index_dict, sha, pipelineConfName):
+def get_index(index_dict, sha, pipelineConfName, target_url):
     ifInsert = True
     db = Database()
     filename = '%s_%s.log' % (pipelineConfName, sha)
@@ -192,7 +193,7 @@ def get_index(index_dict, sha, pipelineConfName):
     logger.info("%s_%s_%s EXCODE = %s" %
                 (pipelineConfName, index_dict['PR'], sha, EXCODE))
     index_dict['EXCODE'] = EXCODE
-    analyze_failed_cause(index_dict)  #分析PR失败原因
+    analyze_failed_cause(index_dict, target_url)  #分析PR失败原因
     if pipelineConfName.startswith(
             'PR-CI-APPROVAL') or EXCODE == 7 or EXCODE == 2:
         pass
@@ -276,8 +277,12 @@ def get_index(index_dict, sha, pipelineConfName):
             index_dict['testCaseTime_total'] = testCaseTime_mac
         elif filename.startswith('PR-CI-Windows'):
             fluidInferenceSize_strlist = data.split('FLuid_Inference Size:', 2)
-            fluidInferenceSize = fluidInferenceSize_strlist[2].split('M')[
-                0].strip()
+            if filename.startswith('PR-CI-Windows-OPENBLAS'):
+                fluidInferenceSize = fluidInferenceSize_strlist[2].split('M')[
+                    0].strip()
+            else:
+                fluidInferenceSize = fluidInferenceSize_strlist[2].split('G')[
+                    0].strip()
             index_dict['fluidInferenceSize'] = float(fluidInferenceSize)
             WhlSize_strlist = data.split('PR whl Size:', 2)
             WhlSize = WhlSize_strlist[2].split('M')[0].strip()
@@ -312,117 +317,151 @@ def get_index(index_dict, sha, pipelineConfName):
     return index_dict
 
 
-def analyze_failed_cause(index_dict):
+def analyze_failed_cause(index_dict, target_url):
     EXCODE = index_dict['EXCODE']
     if EXCODE == 8:  #单测失败原因
         testsfailed_list = []
+        WLIST_PR = wlist_alarm.wlist_pr
+        WLIST_UT = wlist_alarm.wlist_ut
         filename = '%s_%s.log' % (index_dict['ciName'], index_dict['commitId'])
+        shortcommitId = index_dict['commitId'][0:7]
         f = open('buildLog/%s' % filename, 'r')
         data = f.read()
         if index_dict['ciName'].startswith('PR-CI-Py3') or index_dict[
-                'ciName'].startswith('PR-CI-Coverage'):  #Linux
+                'ciName'].startswith('PR-CI-Coverage') or index_dict[
+                    'ciName'].startswith('PR-CI-Mac'):  #Linux
             testsfailed_strlist = data.split('Summary Failed Tests...', 1)
             testsfailed = testsfailed_strlist[1].split(
                 'The following tests FAILED:')[1].split('+ EXCODE=')[0]
-        elif index_dict['ciName'].startswith('PR-CI-Mac') or index_dict[
-                'ciName'].startswith('PR-CI-Windows'):  #Mac/Windows
+        elif index_dict['ciName'].startswith('PR-CI-Windows') and index_dict[
+                'ciName'] != 'PR-CI-Windows-Remain-BuildTest':  #Mac/Windows
             testsfailed_strlist = data.split('The following tests FAILED:', 1)
             testsfailed = testsfailed_strlist[1].split(
                 'Errors while running CTest')[0]
+        else:
+            testsfailed_strlist = data.split('Summary Failed Tests...', 1)
+            testsfailed = testsfailed_strlist[1].split(
+                'The following tests FAILED:')[1].split('+ EXCODE=')[0]
+        f.close()
         with open("buildLog/testsfailed_%s" % filename, "w") as t:
             t.write(testsfailed)
             t.close
-        for line in open("buildLog/testsfailed_%s" % filename):
-            tests = line[19:].strip().split('-')
-            if len(tests) > 1:
-                tests_single = tests[1].strip()
-                testsfailed_list.append(tests_single)
+        with open("buildLog/testsfailed_%s" % filename) as f:
+            for line in f.readlines():
+                tests = line[19:].strip().split('-')
+                if len(tests) > 1:
+                    tests_single = tests[1].strip()
+                    testsfailed_list.append(tests_single)
+            f.close()
         os.remove("buildLog/testsfailed_%s" % filename)
-        date = time.strftime("%Y%m%d", time.localtime())
-        failed_cause_file = 'buildLog/failed_cause%s.csv' % date
-        rerun_failed_cause_file = 'buildLog/rerun_failed_cause%s.csv' % date
-        if os.path.exists(failed_cause_file) == False:
-            create_failed_cause_csv(failed_cause_file)
-        elif os.path.exists(rerun_failed_cause_file) == False:
-            create_failed_cause_csv(rerun_failed_cause_file)
-
-        for t in testsfailed_list:
-            df = pd.read_csv(failed_cause_file)
-            IFRERUN = False
-            failed_write_file = failed_cause_file
-            for index, row in df.iterrows():
-                if index_dict['PR'] == row['PR'] and index_dict[
-                        'commitId'] == row['COMMITID'] and t == row[
-                            'FAILED_MESSAGE']:
-                    IFRERUN = True
-            if IFRERUN == True:
-                df = pd.read_csv(rerun_failed_cause_file)
-                failed_write_file = rerun_failed_cause_file
-            if t in df['FAILED_MESSAGE'].values:
-                max_error_count = df[(df['FAILED_MESSAGE'] == t)].sort_values(
-                    by='ERROR_COUNT', ascending=False).iloc[0]['ERROR_COUNT']
-                current_error_count = max_error_count + 1
-                data = {
-                    'TIME': time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
-                    'PR': index_dict['PR'],
-                    'COMMITID': index_dict['commitId'],
-                    'CINAME': index_dict['ciName'],
-                    'EXCODE': 8,
-                    'FAILED_MESSAGE': [t],
-                    'ERROR_COUNT': current_error_count
-                }  #, 'IFRERUN': IFRERUN}    
+        if len(testsfailed_list) > 20:
+            logger.error("PR's uts failed 20+: %s %s: %s" %
+                         (index_dict['PR'], index_dict['ciName'], target_url))
+        else:
+            today = datetime.date.today()
+            today_10_timestamp = int(
+                time.mktime(time.strptime(str(today),
+                                          '%Y-%m-%d'))) + 60 * 60 * 10
+            if int(time.time()) < today_10_timestamp:
+                yesterday = today - datetime.timedelta(days=1)
+                date = yesterday.strftime('%Y%m%d')
             else:
-                data = {
-                    'TIME': time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
-                    'PR': index_dict['PR'],
-                    'COMMITID': index_dict['commitId'],
-                    'CINAME': index_dict['ciName'],
-                    'EXCODE': 8,
-                    'FAILED_MESSAGE': [t],
-                    'ERROR_COUNT': 1
-                }  #, 'IFRERUN': IFRERUN}
-            logger.info('🌲 IFRERUN: %s data: %s' % (IFRERUN, data))
-            write_data = pd.DataFrame(data)
-            write_data.to_csv(failed_write_file, mode='a', header=False)
-        df = pd.read_csv(failed_cause_file)
-        alarm_ut_list = []
-        alarm_ut_dict = {}
-        for index, row in df.iterrows():
-            if row['ERROR_COUNT'] > 1 and row[
-                    'FAILED_MESSAGE'] not in alarm_ut_list:
-                alarm_ut_list.append(row['FAILED_MESSAGE'])
-        for ut in alarm_ut_list:
-            alarm_ut_dict[ut] = []
-        for index, row in df.iterrows():
-            if row['FAILED_MESSAGE'] in alarm_ut_list:
-                pr_list = []
-                for i in alarm_ut_dict[row['FAILED_MESSAGE']]:
-                    pr = int(i.split('_')[0])
-                    pr_list.append(pr)
-                if row['PR'] not in pr_list:
-                    alarm_ut_dict[row['FAILED_MESSAGE']].append('%s_%s' % (
-                        row['PR'], row['COMMITID']))
+                date = today.strftime('%Y%m%d')
+            failed_cause_file = 'buildLog/failed_cause_%s.csv' % date
+            rerun_failed_cause_file = 'buildLog/rerun_failed_cause_%s.csv' % date
+            if os.path.exists(failed_cause_file) == False:
+                create_failed_cause_csv(failed_cause_file)
+            if os.path.exists(rerun_failed_cause_file) == False:
+                create_failed_cause_csv(rerun_failed_cause_file)
+            for t in testsfailed_list:
+                df = pd.read_csv(failed_cause_file)
+                IFRERUN = False
+                failed_write_file = failed_cause_file
+                for index, row in df.iterrows():
+                    if index_dict['PR'] == row['PR'] and shortcommitId == row[
+                            'COMMITID'] and t == row['FAILED_MESSAGE']:
+                        IFRERUN = True
+                if IFRERUN == True:
+                    df = pd.read_csv(rerun_failed_cause_file)
+                    failed_write_file = rerun_failed_cause_file
+                if t in df['FAILED_MESSAGE'].values:
+                    max_error_count = df[(
+                        df['FAILED_MESSAGE'] == t)].sort_values(
+                            by='ERROR_COUNT',
+                            ascending=False).iloc[0]['ERROR_COUNT']
+                    current_error_count = max_error_count + 1
+                    data = {
+                        'TIME':
+                        time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
+                        'PR': index_dict['PR'],
+                        'COMMITID': shortcommitId,
+                        'CINAME': index_dict['ciName'],
+                        'EXCODE': 8,
+                        'FAILED_MESSAGE': [t],
+                        'ERROR_COUNT': current_error_count,
+                        'CIURL': target_url
+                    }
                 else:
-                    logger.warning('%s 失败只出现在 %s中' %
-                                   (row['FAILED_MESSAGE'], row['PR']))
-        logger.info('alarm_ut_dict : %s' % alarm_ut_dict)
-        if len(alarm_ut_dict) > 0:
-            sendAlarmMail(alarm_ut_dict)
+                    data = {
+                        'TIME':
+                        time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
+                        'PR': index_dict['PR'],
+                        'COMMITID': shortcommitId,
+                        'CINAME': index_dict['ciName'],
+                        'EXCODE': 8,
+                        'FAILED_MESSAGE': [t],
+                        'ERROR_COUNT': 1,
+                        'CIURL': target_url
+                    }
+                logger.info('🌲 IFRERUN: %s data: %s' % (IFRERUN, data))
+                write_data = pd.DataFrame(data)
+                write_data.to_csv(failed_write_file, mode='a', header=False)
+            df = pd.read_csv(failed_cause_file)
+            alarm_ut_list = []
+            alarm_ut_dict = {}
+            for index, row in df.iterrows():
+                if row['ERROR_COUNT'] > 2 and row[
+                        'FAILED_MESSAGE'] not in alarm_ut_list and row[
+                            'FAILED_MESSAGE'] not in WLIST_UT:
+                    alarm_ut_list.append(row['FAILED_MESSAGE'])
+            for ut in alarm_ut_list:
+                alarm_ut_dict[ut] = []
+            for index, row in df.iterrows():
+                if row['FAILED_MESSAGE'] in alarm_ut_list:
+                    alarm_ut_dict[row['FAILED_MESSAGE']].append(
+                        '%s_%s_%s_%s' % (row['PR'], row['COMMITID'],
+                                         row['CINAME'], row['CIURL']))
+            alarm_ut_dict_ult = {}
+            for ut in alarm_ut_dict:
+                if len(alarm_ut_dict[ut]) > 2:
+                    pr_list = []
+                    for i in alarm_ut_dict[ut]:
+                        pr = int(i.split('_')[0])
+                        if pr not in WLIST_PR and pr not in pr_list:
+                            pr_list.append(pr)
+                    if len(pr_list) > 2:
+                        alarm_ut_dict_ult[ut] = alarm_ut_dict[ut]
+            logger.info('alarm_ut_dict_ult : %s' % alarm_ut_dict_ult)
+            if len(alarm_ut_dict_ult) > 0:
+                sendAlarmMail(alarm_ut_dict_ult)
 
 
 def sendAlarmMail(alarm_ut_dict):
     HTML_CONTENT = "<html> <head></head> <body>  <p>Hi, ALL:</p>  <p>以下单测已经在今天挂在3个不同的PR，请QA同学及时revert或disable该单测，并进行排查。</p>"
-    TABLE_CONTENT = '<table border="1" align="center"> <caption> <font size="3"><b>单测失败列表</b></font>  </caption> <tbody> <tr align="center"> <td bgcolor="#d0d0d0">单测</td> <td bgcolor="#d0d0d0">PR</td> <td bgcolor="#d0d0d0"> commitID</td> </tr> '
+    TABLE_CONTENT = '<table border="1" align="center"> <caption> <font size="3"><b>单测失败列表</b></font>  </caption> <tbody> <tr align="center"> <td bgcolor="#d0d0d0">单测</td> <td bgcolor="#d0d0d0">PR</td> <td bgcolor="#d0d0d0"> commitID</td> <td bgcolor="#d0d0d0"> CIName</td> <td bgcolor="#d0d0d0">xly_url</td></tr> '
     for ut in alarm_ut_dict:
         for l in alarm_ut_dict[ut]:
-            pr = l.split('_')[0]
-            commit = l.split('_')[1]
-            TABLE_CONTENT += '<tr align="center"><td> %s</td><td> %s</td><td> %s</td></tr>' % (
-                ut, pr, commit)
+            message = l.split('_')
+            pr = message[0]
+            commit = message[1]
+            ciname = message[2]
+            ciurl = message[3]
+            TABLE_CONTENT += '<tr align="center"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
+                ut, pr, commit, ciname, ciurl)
     HTML_CONTENT = HTML_CONTENT + TABLE_CONTENT + "</tbody> </table> </body></html> "
     mail = Mail()
     mail.set_sender('paddlepaddle_bot@163.com')
-    mail.set_receivers(['xxxx'])
+    mail.set_receivers(['xxxx@163.com'])
     mail.set_title('[告警] CI单测挂了三次以上！')
     mail.set_message(HTML_CONTENT, messageType='html', encoding='gb2312')
     mail.send()
