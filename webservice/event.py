@@ -168,6 +168,9 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
 @router.register("status")
 async def check_ci_status(event, gh, repo, *args, **kwargs):
     """check_ci_status"""
+    repo_just_xly_index_list = localConfig.cf.get(
+        'ciIndex', 'repo_just_xly_index').split(
+            ',')  #这些repo没有埋点，只能拿到xly传回的时间数据
     status_dict = {}
     state = event.data['state']
     commitId = event.data['sha']
@@ -187,6 +190,8 @@ async def check_ci_status(event, gh, repo, *args, **kwargs):
                 document_fix = ifDocumentFix(commit_message)
                 if document_fix == True and context != "PR-CI-CPU-Py2":
                     EXCODE = 0
+                elif repo in repo_just_xly_index_list:
+                    EXCODE = 0 if state == 'success' else 1  #todo: branch now is default_branch
                 else:
                     index_dict = generateCiIndex(repo, commitId, target_url)
                     logger.info("target_url: %s" % target_url)

@@ -197,8 +197,6 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
     if pipelineConfName.startswith(
             'PR-CI-APPROVAL') or EXCODE == 7 or EXCODE == 2:
         pass
-    elif 'FluidDoc' in pipelineConfName:
-        pass
     else:
         buildTime_strlist = data.split('Build Time:', 1)
         buildTime = buildTime_strlist[1:][0].split('s')[0].strip()
@@ -277,23 +275,31 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
             index_dict['testCaseTime_total'] = testCaseTime_mac
         elif filename.startswith('PR-CI-Windows'):
             fluidInferenceSize_strlist = data.split('FLuid_Inference Size:', 2)
-            if filename.startswith('PR-CI-Windows-OPENBLAS'):
-                fluidInferenceSize = fluidInferenceSize_strlist[2].split('M')[
-                    0].strip()
-            else:
-                fluidInferenceSize = fluidInferenceSize_strlist[2].split('G')[
-                    0].strip()
+            fluidInferenceSize = fluidInferenceSize_strlist[2].split('G')[
+                0].strip()
             index_dict['fluidInferenceSize'] = float(fluidInferenceSize)
             WhlSize_strlist = data.split('PR whl Size:', 2)
             WhlSize = WhlSize_strlist[2].split('M')[0].strip()
             index_dict['WhlSize'] = float(WhlSize)
             if not filename.startswith('PR-CI-Windows-OPENBLAS'):
+                testCaseCount_single_strlist = data.split(
+                    'Windows 1 card TestCases count is')
+                testCaseCount_single = int(testCaseCount_single_strlist[-1]
+                                           .split('\n')[0].strip())
+                index_dict['testCaseCount_single'] = testCaseCount_single
+                testCaseCount_total = testCaseCount_single
+                index_dict['testCaseCount_total'] = testCaseCount_total
+                testCaseTime_single_strlist = data.split(
+                    'Windows 1 card TestCases Total Time:')
+                testCaseTime_single = int(testCaseTime_single_strlist[1:][0]
+                                          .split('s')[0].strip())
+                index_dict['testCaseTime_single'] = testCaseTime_single
                 testCaseTime_win_strlist = data.split(
                     'Windows TestCases Total Time:')
                 testCaseTime_win = int(testCaseTime_win_strlist[1:][0].split(
                     's')[0].strip())
                 index_dict['testCaseTime_total'] = testCaseTime_win
-
+    f.close()
     if EXCODE != 7:  #build error Not in paddle_ci_index
         insertTime = int(time.time())
         query_stat = "SELECT * FROM paddle_ci_index WHERE ciName='%s' and commitId='%s' and PR=%s order by time desc" % (
