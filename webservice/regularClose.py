@@ -79,7 +79,7 @@ async def close(types, itemList, gh, user, repo):
             try:
                 await gh.patch(url, data=data)
                 mail_content = "<html><body><p>Hi, ALL:</p> <p>以下issue/pr超过1年未更新，将关闭</p> <table border='1' align=center> <caption><font size='3'><b>gitClone大于10min</b></font></caption>"
-                mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>PR</td><td bgcolor='#d0d0d0'>CI名称</td><td bgcolor='#d0d0d0'>commitId</td><td bgcolor='#d0d0d0'>阶段名称</td><td bgcolor='#d0d0d0'>gitClone时间</td></tr>"
+                mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>issue/pr号</td></tr>"
                 task_info = ""
                 task_info = task_info + "<tr align=center><td>{}</td><td>{}</td></tr>".format(
                     event, i)
