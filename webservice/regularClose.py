@@ -5,6 +5,7 @@ import json
 import datetime
 import logging
 import gidgethub
+from utils.mail import Mail
 from gidgethub import aiohttp as gh_aiohttp
 from utils.auth import get_jwt, get_installation, get_installation_access_token
 
@@ -77,11 +78,27 @@ async def close(types, itemList, gh, user, repo):
                                                                 event, i)
             try:
                 await gh.patch(url, data=data)
+                mail_content = "<html><body><p>Hi, ALL:</p> <p>以下issue/pr超过1年未更新，将关闭</p> <table border='1' align=center> <caption><font size='3'><b>gitClone大于10min</b></font></caption>"
+                mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>PR</td><td bgcolor='#d0d0d0'>CI名称</td><td bgcolor='#d0d0d0'>commitId</td><td bgcolor='#d0d0d0'>阶段名称</td><td bgcolor='#d0d0d0'>gitClone时间</td></tr>"
+                task_info = ""
+                task_info = task_info + "<tr align=center><td>{}</td><td>{}</td></tr>".format(
+                    event, i)
+                mail_content = mail_content + task_info + "</table></body></html>"
+                sendCloseMail(mail_content)
                 logger.info("%s_id: %s closed success!" % (event, i))
             except gidgethub.BadRequest:
                 logger.error("%s_id: %s closed failed!" % (event, i))
     else:
         logger.info("%s is empty!" % item)
+
+
+def sendCloseMail(content):
+    mail = Mail()
+    mail.set_sender('xxxx@baidu.com')
+    mail.set_receivers(['xxxx@baidu.com'])
+    mail.set_title('关闭超过1年未更新的issue/pr通知~')
+    mail.set_message(content, messageType='html', encoding='gb2312')
+    mail.send()
 
 
 async def main(user, repo):
