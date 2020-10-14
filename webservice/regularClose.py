@@ -5,7 +5,7 @@ import json
 import datetime
 import logging
 import gidgethub
-from utils.mail import Mail
+from utils.mail_163 import Mail
 from gidgethub import aiohttp as gh_aiohttp
 from utils.auth import get_jwt, get_installation, get_installation_access_token
 
@@ -72,22 +72,22 @@ async def close(types, itemList, gh, user, repo):
     data = {"state": "closed"}
     d = json.dumps(data)
     logger.info("close %s count is %s: %s" % (types, len(itemList), itemList))
+    mail_content = "<html><body><p>Hi, ALL:</p> <p>以下issue/pr超过1年未更新，将关闭</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
+    mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>issue/pr号</td></tr>"
+    task_info = ""
     if len(itemList) != 0:
         for i in itemList:
             url = "https://api.github.com/repos/%s/%s/%s/%s" % (user, repo,
                                                                 event, i)
             try:
                 await gh.patch(url, data=data)
-                mail_content = "<html><body><p>Hi, ALL:</p> <p>以下issue/pr超过1年未更新，将关闭</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
-                mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>issue/pr号</td></tr>"
-                task_info = ""
                 task_info = task_info + "<tr align=center><td>{}</td><td>{}</td></tr>".format(
                     event, i)
-                mail_content = mail_content + task_info + "</table></body></html>"
-                sendCloseMail(mail_content)
                 logger.info("%s_id: %s closed success!" % (event, i))
             except gidgethub.BadRequest:
                 logger.error("%s_id: %s closed failed!" % (event, i))
+        mail_content = mail_content + task_info + "</table></body></html>"
+        sendCloseMail(mail_content)
     else:
         logger.info("%s is empty!" % item)
 
