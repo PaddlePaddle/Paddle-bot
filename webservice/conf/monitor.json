@@ -1,0 +1,5 @@
+{
+    "PaddlePaddle/Paddle": ["PR-CI-Coverage", "PR-CI-Py3", "PR-CI-CPU-Py2", "PR-CI-Inference", "PR-CI-Mac", "PR-CI-Mac-Python3", "PR-CI-Windows-OPENBLAS", "PR-CI-Windows", "PR-CI-APPROVAL"],
+    "PaddlePaddle/benchmark": ["PR-CI-OP-Benchmark", "PR-CI-APPROVAL"],
+    "PaddlePaddle/FluidDoc": ["FluidDoc1"]
+}
