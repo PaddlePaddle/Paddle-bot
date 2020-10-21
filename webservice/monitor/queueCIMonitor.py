@@ -35,10 +35,7 @@ def ifDocument(commit, repo):
     """判断是否指修改文档"""
     ifDocument = False
     url = 'https://api.github.com/repos/%s/commits/%s' % (repo, commit)
-    headers = {
-        'Authorization': "token 0d1916cd773b36f4d6afbaa9a5838e87b6d9c506"
-    }
-    response = requests.get(url, headers=headers).json()
+    response = requests.get(url).json()
     message = response['commit']['message']
     if 'test=document_fix' in message:
         ifDocument = True
