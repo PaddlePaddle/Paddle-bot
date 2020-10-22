@@ -150,6 +150,20 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
         await gh.post(url, data={"body": message})
 
 
+@router.register("issues", action="opened")
+async def issues_assign_reviewer(event, gh, repo, *args, **kwargs):
+    """assign reviewer for issuue"""
+    if repo in ['PaddlePaddle/Paddle']:
+        assign_url = event.data["issue"]["url"] + "/assignees"
+        bos_url = 'https://paddle-docker-tar.cdn.bcebos.com/buildLog/todayDuty.log'  #取当日值班同学
+        assignees = ['%s' % requests.get(bos_url).text]
+        payload = {"assignees": assignees}
+        response = await gh.post(assign_url, data=payload)
+        assignees_length = len(response['assignees'])
+        if assignees_length < 1:
+            logger.error('%s not in PaddlePaddle!' % assignees)
+
+
 @router.register("issues", action="closed")
 async def check_close_regularly(event, gh, repo, *args, **kwargs):
     """check_close_regularly"""
