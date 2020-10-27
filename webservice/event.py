@@ -165,8 +165,8 @@ async def issues_assign_reviewer(event, gh, repo, *args, **kwargs):
 
 
 @router.register("issues", action="opened")
-async def issue_event_ci(event, gh, repo, *args, **kwargs):
-    """Check if PR triggers CI"""
+async def issue_event(event, gh, repo, *args, **kwargs):
+    """Automatically respond to users"""
     issue_num = event.data['issue']['number']
     url = event.data["issue"]["comments_url"]
     if repo not in [
@@ -178,14 +178,7 @@ async def issue_event_ci(event, gh, repo, *args, **kwargs):
         repo = 'Others'
     if repo == 'PaddlePaddle/Paddle':
         message = "%s\r\n\r\n%s" % (
-            localConfig.cf.get(repo, 'ISSUE_OPENED'),
-            localConfig.cf.get(repo, 'ISSUE_OPENED_EN'))
-        logger.info("Issue%s automatic reply successfully." % (issue_num))
-        if event.data['action'] == "opened":
-            await gh.post(url, data={"body": message})
-    else:
-        message = "%s\r\n\r\n%s" % (
-            localConfig.cf.get(repo, 'ISSUE_OPENED'),
+            localConfig.cf.get(repo, 'ISSUE_OPENED_CN'),
             localConfig.cf.get(repo, 'ISSUE_OPENED_EN'))
         logger.info("Issue%s automatic reply successfully." % (issue_num))
         if event.data['action'] == "opened":
