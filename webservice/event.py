@@ -164,18 +164,41 @@ async def issues_assign_reviewer(event, gh, repo, *args, **kwargs):
             logger.error('%s not in PaddlePaddle!' % assignees)
 
 
+@router.register("issues", action="opened")
+async def issue_event_ci(event, gh, repo, *args, **kwargs):
+    """Check if PR triggers CI"""
+    issue_num = event.data['issue']['number']
+    url = event.data["issue"]["comments_url"]
+    if repo not in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark', 'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc', 'iducn/HelloWorld']:
+        repo = 'Others'
+    if repo == 'PaddlePaddle/Paddle':
+        message = "%s\r\n\r\n%s" % (localConfig.cf.get(repo, 'ISSUE_OPENED'),
+                                    localConfig.cf.get(repo, 'ISSUE_OPENED_EN'))
+        logger.info("Issue%s automatic reply successfully." % (issue_num))
+        if event.data['action'] == "opened":
+            await gh.post(url, data={"body": message})
+    else:
+        message = "%s\r\n\r\n%s" % (localConfig.cf.get(repo, 'ISSUE_OPENED'),
+                                    localConfig.cf.get(repo, 'ISSUE_OPENED_EN'))
+        logger.info("Issue%s automatic reply successfully." % (issue_num))
+        if event.data['action'] == "opened":
+            await gh.post(url, data={"body": message})
+
+
 @router.register("issues", action="closed")
 async def check_close_regularly(event, gh, repo, *args, **kwargs):
     """check_close_regularly"""
     url = event.data["issue"]["comments_url"]
     sender = event.data["sender"]["login"]
-    if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc'
-    ]:
+    if repo not in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark', 'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc', 'iducn/HelloWorld']:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
         message = localConfig.cf.get(repo, 'CLOSE_REGULAR')
+        await gh.post(url, data={"body": message})
+    else:
+        message = "%s\r\n\r\n%s\r\n%s" % (localConfig.cf.get(repo, 'ISSUE_CLOSE'),
+                                            localConfig.cf.get(repo, 'CHOOSE_YES'),
+                                            localConfig.cf.get(repo, 'CHOOSE_NO'))
         await gh.post(url, data={"body": message})
 
 
