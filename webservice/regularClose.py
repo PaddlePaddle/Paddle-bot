@@ -5,7 +5,7 @@ import json
 import datetime
 import logging
 import gidgethub
-from utils.mail_163 import Mail
+from utils.mail import Mail
 from gidgethub import aiohttp as gh_aiohttp
 from utils.auth import get_jwt, get_installation, get_installation_access_token
 
@@ -14,6 +14,15 @@ logging.basicConfig(
     filename='./logs/regularClose.log',
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+def sendCloseMail(content):
+    mail = Mail()
+    mail.set_sender('xxxx@baidu.com')
+    mail.set_receivers(['xxxx@baidu.com'])
+    mail.set_title('关闭超过1年未更新的issue/pr通知~')
+    mail.set_message(content, messageType='html', encoding='gb2312')
+    mail.send()
 
 
 def getNextUrl(link):
@@ -90,15 +99,6 @@ async def close(types, itemList, gh, user, repo):
         sendCloseMail(mail_content)
     else:
         logger.info("%s is empty!" % item)
-
-
-def sendCloseMail(content):
-    mail = Mail()
-    mail.set_sender('xxxx@baidu.com')
-    mail.set_receivers(['xxxx@baidu.com'])
-    mail.set_title('关闭超过1年未更新的issue/pr通知~')
-    mail.set_message(content, messageType='html', encoding='gb2312')
-    mail.send()
 
 
 async def main(user, repo):
