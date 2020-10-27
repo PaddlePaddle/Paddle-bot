@@ -1,6 +1,5 @@
 from gidgethub import routing
-from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, getPRnum, ifCancelXly, \
-    getCommitComments
+from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, getPRnum, ifCancelXly, getCommitComments
 from utils.readConfig import ReadConfig
 from utils.analyze_buildLog import ifDocumentFix, generateCiIndex, ifAlreadyExist, generateCiTime
 from utils.db import Database
@@ -171,8 +170,10 @@ async def issue_event_ci(event, gh, repo, *args, **kwargs):
     issue_num = event.data['issue']['number']
     url = event.data["issue"]["comments_url"]
     if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc', 'iducn/HelloWorld'
+            'PaddlePaddle/Paddle',
+            'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode',
+            'PaddlePaddle/FluidDoc',
     ]:
         repo = 'Others'
     if repo == 'PaddlePaddle/Paddle':
