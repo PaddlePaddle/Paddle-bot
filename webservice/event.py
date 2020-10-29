@@ -181,6 +181,7 @@ async def issue_event(event, gh, repo, *args, **kwargs):
             localConfig.cf.get(repo, 'ISSUE_OPENED_CN'),
             localConfig.cf.get(repo, 'ISSUE_OPENED_EN'))
         logger.info("Issue%s automatic reply successfully." % (issue_num))
+        await gh.post(url, data={"body": message})
 
 
 @router.register("issues", action="closed")
