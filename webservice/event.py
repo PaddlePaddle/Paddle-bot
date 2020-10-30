@@ -155,13 +155,33 @@ async def issues_assign_reviewer(event, gh, repo, *args, **kwargs):
     """assign reviewer for issuue"""
     if repo in ['PaddlePaddle/Paddle']:
         assign_url = event.data["issue"]["url"] + "/assignees"
-        bos_url = 'https://paddle-docker-tar.cdn.bcebos.com/buildLog/todayDuty.log'  #取当日值班同学
+        bos_url = 'https://paddle-docker-tar.cdn.bcebos.com/buildLog/todayDuty.log'  # 取当日值班同学
         assignees = ['%s' % requests.get(bos_url).text]
         payload = {"assignees": assignees}
         response = await gh.post(assign_url, data=payload)
         assignees_length = len(response['assignees'])
         if assignees_length < 1:
             logger.error('%s not in PaddlePaddle!' % assignees)
+
+
+@router.register("issues", action="opened")
+async def issue_event(event, gh, repo, *args, **kwargs):
+    """Automatically respond to users"""
+    issue_num = event.data['issue']['number']
+    url = event.data["issue"]["comments_url"]
+    if repo not in [
+            'PaddlePaddle/Paddle',
+            'PaddlePaddle/benchmark',
+            'lelelelelez/leetcode',
+            'PaddlePaddle/FluidDoc',
+    ]:
+        repo = 'Others'
+    if repo == 'PaddlePaddle/Paddle':
+        message = "%s\r\n\r\n%s" % (
+            localConfig.cf.get(repo, 'ISSUE_OPENED_CN'),
+            localConfig.cf.get(repo, 'ISSUE_OPENED_EN'))
+        logger.info("Issue%s automatic reply successfully." % (issue_num))
+        await gh.post(url, data={"body": message})
 
 
 @router.register("issues", action="closed")
@@ -171,11 +191,17 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
     sender = event.data["sender"]["login"]
     if repo not in [
             'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc'
+            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc', 'iducn/HelloWorld'
     ]:
         repo = 'Others'
     if sender == 'paddle-bot[bot]':
         message = localConfig.cf.get(repo, 'CLOSE_REGULAR')
+        await gh.post(url, data={"body": message})
+    else:
+        message = "%s\r\n\r\n%s\r\n%s" % (
+            localConfig.cf.get(repo, 'ISSUE_CLOSE'),
+            localConfig.cf.get(repo, 'CHOOSE_YES'),
+            localConfig.cf.get(repo, 'CHOOSE_NO'))
         await gh.post(url, data={"body": message})
 
 
@@ -184,7 +210,7 @@ async def check_ci_status(event, gh, repo, *args, **kwargs):
     """check_ci_status"""
     repo_just_xly_index_list = localConfig.cf.get(
         'ciIndex', 'repo_just_xly_index').split(
-            ',')  #这些repo没有埋点，只能拿到xly传回的时间数据
+            ',')  # 这些repo没有埋点，只能拿到xly传回的时间数据
     status_dict = {}
     state = event.data['state']
     commitId = event.data['sha']
@@ -205,7 +231,7 @@ async def check_ci_status(event, gh, repo, *args, **kwargs):
                 if document_fix == True and context != "PR-CI-CPU-Py2":
                     EXCODE = 0
                 elif repo in repo_just_xly_index_list:
-                    EXCODE = 0 if state == 'success' else 1  #todo: branch now is default_branch
+                    EXCODE = 0 if state == 'success' else 1  # todo: branch now is default_branch
                 else:
                     index_dict = generateCiIndex(repo, commitId, target_url)
                     logger.info("target_url: %s" % target_url)
@@ -459,8 +485,8 @@ async def update_ci_failure_summary(gh, context, ci_link, comment_list,
 
 async def clean_parent_comment_list(gh, commits_url, pr_num, shortId):
     commits_comments_list = getCommitComments(commits_url)
-    if len(commits_comments_list) > 1:  #pr中有大于一条commit再执行判断
-        for i in range(len(commits_comments_list) - 1):  #最新commit不需要清理
+    if len(commits_comments_list) > 1:  # pr中有大于一条commit再执行判断
+        for i in range(len(commits_comments_list) - 1):  # 最新commit不需要清理
             commit_comments_list = commits_comments_list[i]
             if len(commit_comments_list) != 0:
                 count = 0
