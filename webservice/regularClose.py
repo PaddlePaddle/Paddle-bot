@@ -52,7 +52,7 @@ async def overdueList(types, url, gh):
         res = json.loads(body.decode('utf8'))
         for item in res:
             if types == 'issues' and 'pull_request' not in item:
-                if item['updated_at'] < lastYear:  #if updateTime earlier than lastYear
+                if item['updated_at'] < lastYear:  # if updateTime earlier than lastYear
                     user = item['user']['login']
                     comments_url = item['comments_url']
                     (code_co, header_co,
@@ -67,7 +67,7 @@ async def overdueList(types, url, gh):
                         if last_comment_user != user:
                             overduelist.append(item['number'])
             elif types == 'pr':
-                if item['updated_at'] < lastYear:  #if updateTime earlier than lastYear
+                if item['updated_at'] < lastYear:  # if updateTime earlier than lastYear
                     overduelist.append(item['number'])
         url = getNextUrl(header['link'])
     return overduelist
@@ -81,8 +81,6 @@ async def close(types, itemList, gh, user, repo):
     data = {"state": "closed"}
     d = json.dumps(data)
     logger.info("close %s count is %s: %s" % (types, len(itemList), itemList))
-    mail_content = "<html><body><p>Hi, ALL:</p> <p>以下issue/pr超过1年未更新，将关闭</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
-    mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>issue/pr号</td></tr>"
     task_info = ""
     if len(itemList) != 0:
         for i in itemList:
@@ -95,10 +93,9 @@ async def close(types, itemList, gh, user, repo):
                 logger.info("%s_id: %s closed success!" % (event, i))
             except gidgethub.BadRequest:
                 logger.error("%s_id: %s closed failed!" % (event, i))
-        mail_content = mail_content + task_info + "</table></body></html>"
-        sendCloseMail(mail_content)
     else:
-        logger.info("%s is empty!" % item)
+        logger.info("%s is empty!" % itemList)
+    return task_info
 
 
 async def main(user, repo):
@@ -124,8 +121,18 @@ async def main(user, repo):
             logger.info("PRList: %s" % PRList)
             issueList = await overdueList('issues', issues_url, gh)
             logger.info("issueList: %s" % issueList)
-            await close('pr', PRList, gh, user, repo)
-            await close('issue', issueList, gh, user, repo)
+            pr_info = await close('pr', PRList, gh, user, repo)
+            issue_info = await close('issue', issueList, gh, user, repo)
+            if pr_info or issue_info:
+                mail_content = "<html><body><p>Hi, ALL:</p> <p>以下issue/pr超过1年未更新，Paddle-bot将其关闭。请PM留意。</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
+                mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>issue/pr号</td></tr>"
+                task_info = pr_info + issue_info
+                end_content = "<p>如有疑问，请@张春乐。谢谢</p>"
+                mail_content = mail_content + task_info + end_content + "</table></body></html>"
+                sendCloseMail(mail_content)
+                logger.info("Mail sent success! message: %s" % (mail_content))
+            else:
+                logger.info("PR/issue without timeout")
 
 
 def regularClose_job():
