@@ -9,7 +9,7 @@ import jinja2
 from gidgethub import routing, sansio
 from gidgethub import aiohttp as gh_aiohttp
 from utils.readConfig import ReadConfig
-from utils.test_auth_ipipe import xlyOpenApiRequest
+from utils.auth_ipipe import xlyOpenApiRequest
 from utils.auth import get_jwt, get_installation, get_installation_access_token
 
 here = Path(__file__).resolve().parent
