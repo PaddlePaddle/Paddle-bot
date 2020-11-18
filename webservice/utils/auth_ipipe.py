@@ -52,7 +52,7 @@ class xlyOpenApiRequest(xlyAuthorization):
         req = requests.Request("GET", url, headers=headers).prepare()
         sign = self.set_sign(param)
         req.headers.update({'Authorization': sign})
-        res = self.session.send(req)
+        res = self.session.send(req, timeout=15)
         return res
 
     def post_method(self,
@@ -67,5 +67,5 @@ class xlyOpenApiRequest(xlyAuthorization):
             "POST", url, data=data, headers=headers).prepare()
         sign = self.set_sign(self.param)
         req.headers.update({'Authorization': sign})
-        res = self.session.send(req)
+        res = self.session.send(req, timeout=15)
         return res
