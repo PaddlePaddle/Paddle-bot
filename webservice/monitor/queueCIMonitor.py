@@ -5,11 +5,11 @@ import sys
 sys.path.append("..")
 from utils.readConfig import ReadConfig
 from utils.test_auth_ipipe import xlyOpenApiRequest
-from utils.getJob_xly import JobList
+from utils.handler_xly import jobHandler
 localConfig = ReadConfig('../conf/config.ini')
 
 
-class getQueueUpCIList(JobList):
+class getQueueUpCIList(jobHandler):
     """The final displayed list of queuedCI"""
 
     def __init__(self):
@@ -21,7 +21,8 @@ class getQueueUpCIList(JobList):
         self.container_ci = [
             'PR-CI-Coverage', 'PR-CI-Py3', 'PR-CI-CPU-Py2', 'PR-CI-Inference',
             'xly-PR-CI-PY35', 'xly-PR-CI-PY27', 'FluidDoc1', 'build-paddle',
-            'xly-PR-CI-PY2', 'xly-PR-CI-PY3', 'PR-CI-CUDA9-CUDNN7'
+            'xly-PR-CI-PY2', 'xly-PR-CI-PY3', 'PR-CI-CUDA9-CUDNN7',
+            'PaddleServing文档测试'
         ]
         self.sa_ci = [
             'PR-CI-Windows', 'PR-CI-Windows-OPENBLAS', 'PR-CI-Mac',
@@ -31,7 +32,8 @@ class getQueueUpCIList(JobList):
 
         self.v100_ci = [
             'PR-CI-Coverage', 'PR-CI-Py3', 'xly-PR-CI-PY35', 'xly-PR-CI-PY27',
-            'xly-PR-CI-PY2', 'xly-PR-CI-PY3', 'PR-CI-CUDA9-CUDNN7'
+            'xly-PR-CI-PY2', 'xly-PR-CI-PY3', 'PR-CI-CUDA9-CUDNN7',
+            'PaddleServing文档测试'
         ]
         self.p4_ci = [
             'PR-CI-CPU-Py2', 'PR-CI-Inference', 'FluidDoc1', 'build-paddle'
@@ -107,19 +109,26 @@ class getQueueUpCIList(JobList):
         Returns:
             all_running_task_list: all running job list.
         """
-        container_running_task_list = self.getJobList('running',
-                                                      self.container_cardType)
+        xly_container_running_task_list = self.getJobList('running')
+        container_running_task_list = self.xlyJobToRequired(
+            xly_container_running_task_list, 'running',
+            self.container_cardType)
         container_running_task_list = self.addStillneedTime(
             container_running_task_list, self.container_ci)
-        sa_running_task_list = self.getJobList('sarunning', self.sa_cardType)
+
+        xly_sa_running_task_list = self.getJobList('sarunning')
+        sa_running_task_list = self.xlyJobToRequired(
+            xly_sa_running_task_list, 'sarunning', self.sa_cardType)
         sa_running_task_list = self.addStillneedTime(sa_running_task_list,
                                                      self.sa_ci)
+
         all_running_task_list = container_running_task_list + sa_running_task_list
         all_running_task_list = self.sortTime(
             all_running_task_list, 'stillneedTime', reverse=False)
         with open("../buildLog/running_task.json", "w") as f:
             json.dump(all_running_task_list, f)
             f.close()
+
         return all_running_task_list
 
     def classifyTaskByCardType(self, task_list, cardType):
@@ -131,8 +140,15 @@ class getQueueUpCIList(JobList):
         Returns:
             cardType_task_list: .
         """
+
         task_list_by_card = []
         for task in task_list:
+            '''
+            if cardType == 'winoopenblas' and task['CIName'].startswith('PR-CI-Windows-OPENBLAS'):
+                task_list_by_card.append(task)
+            elif cardType == 'macpy3' and task['CIName'].startswith('PR-CI-Mac-Python3'):
+                task_list_by_card.append(task)
+            '''
             if cardType == 'mac' and task['CIName'].startswith(
                     'PR-CI-Mac-Python3'):
                 continue
@@ -141,6 +157,7 @@ class getQueueUpCIList(JobList):
                 continue
             if cardType.lower() in task['cardType'].lower():
                 task_list_by_card.append(task)
+
         return task_list_by_card
 
     def addWaitingTaskTimeToStart(self, waiting_task, running_task, ci_list):
@@ -167,6 +184,12 @@ class getQueueUpCIList(JobList):
                 elif 'TEST-Windows' in next_running_job['CIName']:
                     next_running_job['stillneedTime'] = execTime_dict[
                         'PR-CI-Windows_PaddlePaddle/Paddle_False']
+                elif 'PR-CI-Pretest-Ignore' in next_running_job['CIName']:
+                    next_running_job['stillneedTime'] = execTime_dict[
+                        'PR-CI-Coverage_PaddlePaddle/Paddle_False']
+                elif 'PaddleServing文档测试' in next_running_job['CIName']:
+                    next_running_job['stillneedTime'] = execTime_dict[
+                        'PaddleServing文档测试_PaddlePaddle/Serving_False']
             if len(running_task) == 0:
                 waiting_task[j]['timeToStart'] = 1 + lastTaskToStartTime
                 lastTaskToStartTime = lastTaskToStartTime + 1
@@ -186,10 +209,68 @@ class getQueueUpCIList(JobList):
 
         return waiting_task
 
+    def xlyJobToRequired(self, jobList, jobStatus, cardType_list):
+        """
+        This function is to convert xly's task list to the required task list.
+        Args:
+            jobList(list): xly's  task list.
+            jobStatus(str): job status (running/sarunning/waiting/sawaiting).
+            cardType_list(list): card type list.
+        Returns:
+            all_task_list(list): the required task list.
+        """
+        all_task_list = []
+        for t in jobList:
+            if t['label'] not in ['Paddle-musl']:  #musl这条现在不需要管
+                task = {}
+                task['repoName'] = t['repoName']
+                task['CIName'] = t['name']
+                if 'running' in jobStatus:
+                    task['running'] = t['running']
+                else:
+                    task['waiting'] = t['waiting']
+                task['PR'] = str(t['pid'])
+                task['commitId'] = t['commit']
+                task['targetId'] = t['bid']
+                task['cardType'] = t['label']
+                task['jobId'] = t['jobId']
+                if t['repoName'] in [
+                        'PaddlePaddle/Paddle'
+                ]:  #Paddle repo need to check if Document_fix 
+                    task['ifDocument'] = self.ifDocument(t['commit'],
+                                                         t['repoName'])
+                else:
+                    task['ifDocument'] = False
+                for cardType in cardType_list:
+                    if cardType.lower() in task['cardType'].lower() and t[
+                            'jobName'] not in ['构建镜像', 'build-docker-image']:
+                        if task['repoName'] in [
+                                'PaddlePaddle/Paddle',
+                                'PaddlePaddle/benchmark',
+                                'PaddlePaddle/FluidDoc',
+                                'PaddlePaddle/PaddleRec', 'PaddlePaddle/CINN',
+                                'PaddlePaddle/Serving'
+                        ]:
+                            all_task_list.append(task)
+                        else:
+                            print('OTHER REPO: %s' % task)
+                        break
+        return all_task_list
+
     def getWaitingJob(self):
-        container_waiting_task_list = self.getJobList('waiting',
-                                                      self.container_cardType)
-        sa_waiting_task_list = self.getJobList('sawaiting', self.sa_cardType)
+        """
+        this function will get all running list. Include containerJob and SaJob.
+        Returns:
+            all_running_task_list: all running job list.
+        """
+        xly_container_waiting_task_list = self.getJobList('waiting')
+        container_waiting_task_list = self.xlyJobToRequired(
+            xly_container_waiting_task_list, 'waiting',
+            self.container_cardType)
+
+        xly_sa_waiting_task_list = self.getJobList('sawaiting')
+        sa_waiting_task_list = self.xlyJobToRequired(
+            xly_sa_waiting_task_list, 'sawaiting', self.sa_cardType)
 
         if len(container_waiting_task_list) == 0 and len(
                 sa_waiting_task_list) == 0:
