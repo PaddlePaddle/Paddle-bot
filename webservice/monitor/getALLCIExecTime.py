@@ -100,6 +100,9 @@ class getExecTime(dbOperation):
         if execTime_dict[
                 'PR-CI-CUDA9-CUDNN7_PaddlePaddle/Serving_False'] == None:
             execTime_dict['PR-CI-CUDA9-CUDNN7_PaddlePaddle/Serving_False'] = 30
+        if execTime_dict[
+                'PaddleServing文档测试_PaddlePaddle/Serving_False'] == None:
+            execTime_dict['PaddleServing文档测试_PaddlePaddle/Serving_False'] = 5
         execTime_dict['build-paddle_PaddlePaddle/Paddle_False'] = 15
         with open("../buildLog/all_ci_execTime.json", "w") as f:
             json.dump(execTime_dict, f)
