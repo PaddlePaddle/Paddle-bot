@@ -140,6 +140,7 @@ class MarkTimeoutCI(object):
             "IPIPE-UID": "Paddle-bot"
         }
         for item in CIStatusList:
+            MARK_List = []
             PR = item['PR']
             commit = item['commit']
             ci_list = item['CI']
@@ -151,16 +152,19 @@ class MarkTimeoutCI(object):
                     res = xlyOpenApiRequest().post_method(
                         mark_url, json_str, headers=headers)
                     if res.status_code == 200 or res.status_code == 201:
+                        MARK_List.append(True)
                         print('%s_%s_%s mark success!' %
                               (PR, commit, ci['ciName']))
                         logger.error('%s_%s_%s mark success!' %
                                      (PR, commit, ci['ciName']))
                     else:
+                        MARK_List.append(False)
                         print('%s_%s_%s mark failed!' %
                               (PR, commit, ci['ciName']))
                         logger.error('%s_%s_%s mark failed!' %
                                      (PR, commit, ci['ciName']))
-            await self.inform(item)
+            if True in MARK_List:
+                await self.inform(item)
 
     async def inform(self, item):
         """Paddle-bot发出评论"""
