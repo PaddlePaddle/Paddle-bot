@@ -3,6 +3,7 @@ import re
 import aiohttp
 from utils.auth_ipipe import Get_ipipe_auth
 from utils.analyze_buildLog import get_stageUrl
+from handler import xlyHandler
 
 
 def checkPRNotCI(commit_url, sha):
@@ -145,3 +146,38 @@ def ifCancelXly(target_url):
         if status == 'CANCEL':
             ifCancel = True
     return ifCancel
+
+
+class xlyJob(xlyHandler):
+    """xly作业"""
+
+    def MarkByPaddleBot(self, target_url):
+        """是否为机器人标记job的状态"""
+        mark_ci_by_bot = False
+        targetId = target_url.split('/')[-3]
+        res = self.getStageMessge(targetId)
+        jobGroupBuildBeans = res['pipelineBuildBean']['stageBuildBeans'][0][
+            'jobGroupBuildBeans'][0]
+        for job in jobGroupBuildBeans:
+            jobName = job['jobName']
+            if jobName not in ['构建镜像', 'build-docker-image']:
+                mark = job['mark']
+                message = job['message']
+                if job['mark'] == True and job['message'] == 'Paddle-bot':
+                    mark_ci_by_bot = True
+        logger.info('mark_ci_by_bot %s: %s' % (target_url, mark_ci_by_bot))
+        return mark_ci_by_bot
+
+    def CancelJobByXly(self, target_url):
+        """
+        是否为xly取消的任务:
+        1. 手动取消
+        2. 重提commit, 前面的commit任务也会被自动取消
+        """
+        cancel_job = False
+        targetId = target_url.split('/')[-3]
+        res = self.getStageMessge(targetId)
+        status = res['pipelineBuildBean']['pipelineStatusFromStages']
+        if status == 'CANCEL':
+            cancel_job = True
+        return cancel_job
