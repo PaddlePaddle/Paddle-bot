@@ -10,6 +10,7 @@ import re
 
 router = routing.Router()
 localConfig = ReadConfig()
+a=1
 
 logging.basicConfig(
     level=logging.INFO,
