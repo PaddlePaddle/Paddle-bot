@@ -74,11 +74,7 @@ class autoRerunExceptionPR(jobHandler):
         canRerun = False
         status_url = 'https://api.github.com/repos/%s/statuses/%s' % (repoName,
                                                                       commitId)
-        res = requests.get(status_url,
-                           headers={
-                               'Authorization':
-                               'token be093f80d7c38837063749fe5eb366dcc719650a'
-                           })
+        res = requests.get(status_url, headers={'Authorization': 'token xxx'})
         ci_list = []
         for ci in res.json():
             if ci['context'] == CIName:
