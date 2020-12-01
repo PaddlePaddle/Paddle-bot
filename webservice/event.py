@@ -15,6 +15,7 @@ logging.basicConfig(
     level=logging.INFO,
     filename='./logs/event.log',
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,39 +101,40 @@ async def running_check_run(event, gh, repo, *args, **kwargs):
     """running checkrun"""
     url = event.data["check_run"]["url"]
     name = event.data["check_run"]["name"]
-    data = {"name": name, "status": "in_progress"}
-    await gh.patch(
-        url, data=data, accept='application/vnd.github.antiope-preview+json')
-    if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc'
-    ]:
-        repo = 'Others'
-    if check_pr_template == False:
-        error_message = check_pr_template_message if check_pr_template_message != '' else localConfig.cf.get(
-            repo, 'NOT_USING_TEMPLATE')
-        data = {
-            "name": name,
-            "status": "completed",
-            "conclusion": "failure",
-            "output": {
-                "title": "checkTemplateFailed",
-                "summary": error_message
+    if name == 'CheckPRTemplate':
+        if repo not in [
+                'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
+                'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc'
+        ]:
+            repo = 'Others'
+        if check_pr_template == False:
+            error_message = check_pr_template_message if check_pr_template_message != '' else localConfig.cf.get(
+                repo, 'NOT_USING_TEMPLATE')
+            data = {
+                "name": name,
+                "status": "completed",
+                "conclusion": "failure",
+                "output": {
+                    "title": "checkTemplateFailed",
+                    "summary": error_message
+                }
             }
-        }
-    else:
-        data = {
-            "name": name,
-            "status": "completed",
-            "conclusion": "success",
-            "output": {
-                "title": "checkTemplateSuccess",
-                "summary":
-                "✅ This PR's description meets the template requirements!"
+        else:
+            data = {
+                "name": name,
+                "status": "completed",
+                "conclusion": "success",
+                "output": {
+                    "title": "checkTemplateSuccess",
+                    "summary":
+                    "✅ This PR's description meets the tempate requirements!"
+                }
             }
-        }
-    await gh.patch(
-        url, data=data, accept='application/vnd.github.antiope-preview+json')
+        logger.info(data)
+        await gh.patch(
+            url,
+            data=data,
+            accept='application/vnd.github.antiope-preview+json')
 
 
 @router.register("pull_request", action="closed")
