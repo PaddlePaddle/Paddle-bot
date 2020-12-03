@@ -5,14 +5,15 @@ import os
 import requests
 import sys
 sys.path.append("..")
-from utils.handler_xly import jobHandler
+from utils.handler import xlyHandler
 from utils.readConfig import ReadConfig
 from utils.mail import Mail
+from utils.common import CommonModule
 
 localConfig = ReadConfig('../conf/config.ini')
 
 
-class autoRerunExceptionPR(jobHandler):
+class autoRerunExceptionPR(xlyHandler, CommonModule):
     """
     1. 获取正在运行的任务
     2. 判断任务是否卡住: 最后一行日志的时间距离当前时间大于30min 
@@ -78,7 +79,6 @@ class autoRerunExceptionPR(jobHandler):
         ci_list = []
         for ci in res.json():
             if ci['context'] == CIName:
-
                 already_exit = False
                 for i in ci_list:
                     if i['time'] > ci['created_at']:
@@ -114,21 +114,10 @@ class autoRerunExceptionPR(jobHandler):
         os.remove('%s' % filename)
         return isstuck
 
-    def utcTimeToStrTime(self, utcTime):
-        UTC_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-        utcTime = datetime.datetime.strptime(utcTime, UTC_FORMAT)
-        localtime = utcTime + datetime.timedelta(hours=8)
-        return localtime
-
-    def strTimeToTimestamp(self, strTime):
-        timeArray = time.strptime(strTime, "%Y-%m-%d %H:%M:%S")
-        timeStamp = int(time.mktime(timeArray))
-        return timeStamp
-
     def sendMail(self, mailContent):
         mail = Mail()
-        mail.set_sender('xxx@baidu.com')
-        mail.set_receivers(['xxxx@baidu.com'])
+        mail.set_sender('xxx@xx.com')
+        mail.set_receivers(['xxx@xx.com'])
         mail.set_title('[告警]自动取消并rerun卡住的任务')
         mail.set_message(mailContent, messageType='html', encoding='gb2312')
         mail.send()
