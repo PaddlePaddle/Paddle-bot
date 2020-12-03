@@ -4,7 +4,7 @@ import sys
 sys.path.append("..")
 from utils.test_auth_ipipe import xlyOpenApiRequest
 from utils.mail import Mail
-from utils.handler_xly import jobHandler
+from utils.handler import xlyHandler, PRHandler
 import os
 import time
 import pandas as pd
@@ -17,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class killTimeoutRunningJob(jobHandler):
+class killTimeoutRunningJob(PRHandler, xlyHandler):
     """取消超时任务"""
 
     def __init__(self):
@@ -26,7 +26,7 @@ class killTimeoutRunningJob(jobHandler):
                               'approval']  # 'kunlun' 
         self.__coverage_timeout_default = 180
         self.__py3_timeout_default = 120
-        self.__win_timeout_default = 180
+        self.__win_timeout_default = 240
         self.__winopenblas_timeout_default = 80
         self.__p4_timeout_default = 60
         self.__mac_timeout_default = 60
@@ -101,7 +101,7 @@ class killTimeoutRunningJob(jobHandler):
         timeout_running_job, alarm_running_job = self.filter_timeout_task()
         mailContent = ''
         if len(timeout_running_job) > 0:
-            mailContent += " <p>以下任务被判定为运行超时, 已自动取消，请排查超时原因！</p> <p>超时规则: Coverage超过180min, Py3超过120min, Inference/CPU 超过60min, Mac/Mac-python3 超过60min, Windows超过180min, Windows-OPENBLAS超过80min</p> <table border='1' align=center> <caption><font size='3'><b>自动取消运行中的任务列表</b></font></caption><tr align=center><td bgcolor='#d0d0d0'>PR</td><td bgcolor='#d0d0d0'>CIName</td><td bgcolor='#d0d0d0'>已运行时间/min</td><td bgcolor='#d0d0d0'>repo</td><td bgcolor='#d0d0d0'>任务链接</td></tr>"
+            mailContent += " <p>以下任务被判定为运行超时, 已自动取消，请排查超时原因！</p> <p>超时规则: Coverage超过180min, Py3超过120min, Inference/CPU 超过60min, Mac/Mac-python3 超过60min, Windows超过240min, Windows-OPENBLAS超过80min</p> <table border='1' align=center> <caption><font size='3'><b>自动取消运行中的任务列表</b></font></caption><tr align=center><td bgcolor='#d0d0d0'>PR</td><td bgcolor='#d0d0d0'>CIName</td><td bgcolor='#d0d0d0'>已运行时间/min</td><td bgcolor='#d0d0d0'>repo</td><td bgcolor='#d0d0d0'>任务链接</td></tr>"
             for task in timeout_running_job:
                 target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/%s/job/%s' % (
                     task['targetId'], task['jobId'])
@@ -114,20 +114,14 @@ class killTimeoutRunningJob(jobHandler):
                     'TASKURL': target_url
                 }
                 self.save_cancel_job(data)
-                cancel_url = 'https://xly.bce.baidu.com/open-api/ipipe/rest/v1/job-builds/%s/operation-requests' % task[
-                    'jobId']
-                DATA = {"type": "CANCEL"}
-                json_str = json.dumps(DATA)
-                headers = {
-                    "Content-Type": "application/json",
-                    "IPIPE-UID": "Paddle-bot"
-                }
-                res = xlyOpenApiRequest().post_method(
-                    cancel_url, json_str, headers=headers)
+                res = self.cancelJob(task['jobId'])
                 if res.status_code == 200 or res.status_code == 201:
                     mailContent += "<tr align=center><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
                         task['PR'], task['CIName'], task['running'],
                         task['repoName'], target_url)
+                else:
+                    mailContent += "<tr align=center><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+                        task['PR'], task['CIName'], '取消作业失败！！', target_url)
             mailContent += "</table>"
         if len(alarm_running_job) > 0:
             mailContent += "<p>此外, 以下任务已经运行超过60min, 请查看任务是否卡住.</p>"
@@ -148,8 +142,10 @@ class killTimeoutRunningJob(jobHandler):
         HTML_CONTENT += mailContent
         HTML_CONTENT += "<p>如有问题，请联系张春乐.</p> <p>张春乐</p></body></html>"
         mail = Mail()
-        mail.set_sender('xxx@baidu.com')
-        mail.set_receivers(['xxx@baidu.com'])
+        mail.set_sender('zhangchunle@baidu.com')
+        mail.set_receivers(
+            ['zhangchunle@baidu.com']
+        )  #, 'tianshuo03@baidu.com', 'v_duchun@baidu.com', 'luotao02@baidu.com', 'zhouwei25@baidu.com', 'wanghuan29@baidu.com', 'wuhuanzhou@baidu.com'])
         mail.set_title('[告警]自动取消超时任务')
         mail.set_message(HTML_CONTENT, messageType='html', encoding='gb2312')
         mail.send()

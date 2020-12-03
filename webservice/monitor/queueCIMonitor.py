@@ -5,11 +5,11 @@ import sys
 sys.path.append("..")
 from utils.readConfig import ReadConfig
 from utils.test_auth_ipipe import xlyOpenApiRequest
-from utils.handler_xly import jobHandler
+from utils.handler import PRHandler, xlyHandler
 localConfig = ReadConfig('../conf/config.ini')
 
 
-class getQueueUpCIList(jobHandler):
+class getQueueUpCIList(xlyHandler, PRHandler):
     """The final displayed list of queuedCI"""
 
     def __init__(self):
@@ -128,7 +128,6 @@ class getQueueUpCIList(jobHandler):
         with open("../buildLog/running_task.json", "w") as f:
             json.dump(all_running_task_list, f)
             f.close()
-
         return all_running_task_list
 
     def classifyTaskByCardType(self, task_list, cardType):
@@ -140,15 +139,8 @@ class getQueueUpCIList(jobHandler):
         Returns:
             cardType_task_list: .
         """
-
         task_list_by_card = []
         for task in task_list:
-            '''
-            if cardType == 'winoopenblas' and task['CIName'].startswith('PR-CI-Windows-OPENBLAS'):
-                task_list_by_card.append(task)
-            elif cardType == 'macpy3' and task['CIName'].startswith('PR-CI-Mac-Python3'):
-                task_list_by_card.append(task)
-            '''
             if cardType == 'mac' and task['CIName'].startswith(
                     'PR-CI-Mac-Python3'):
                 continue
@@ -157,7 +149,6 @@ class getQueueUpCIList(jobHandler):
                 continue
             if cardType.lower() in task['cardType'].lower():
                 task_list_by_card.append(task)
-
         return task_list_by_card
 
     def addWaitingTaskTimeToStart(self, waiting_task, running_task, ci_list):
@@ -190,6 +181,8 @@ class getQueueUpCIList(jobHandler):
                 elif 'PaddleServing文档测试' in next_running_job['CIName']:
                     next_running_job['stillneedTime'] = execTime_dict[
                         'PaddleServing文档测试_PaddlePaddle/Serving_False']
+                elif 'PR-CI-OP-benchmark-TEST' in next_running_job['CIName']:
+                    next_running_job['stillneedTime'] = 60
             if len(running_task) == 0:
                 waiting_task[j]['timeToStart'] = 1 + lastTaskToStartTime
                 lastTaskToStartTime = lastTaskToStartTime + 1
@@ -237,8 +230,8 @@ class getQueueUpCIList(jobHandler):
                 if t['repoName'] in [
                         'PaddlePaddle/Paddle'
                 ]:  #Paddle repo need to check if Document_fix 
-                    task['ifDocument'] = self.ifDocument(t['commit'],
-                                                         t['repoName'])
+                    task['ifDocument'] = self.ifDocumentByCommitId(
+                        t['commit'], t['repoName'])
                 else:
                     task['ifDocument'] = False
                 for cardType in cardType_list:
@@ -267,11 +260,9 @@ class getQueueUpCIList(jobHandler):
         container_waiting_task_list = self.xlyJobToRequired(
             xly_container_waiting_task_list, 'waiting',
             self.container_cardType)
-
         xly_sa_waiting_task_list = self.getJobList('sawaiting')
         sa_waiting_task_list = self.xlyJobToRequired(
             xly_sa_waiting_task_list, 'sawaiting', self.sa_cardType)
-
         if len(container_waiting_task_list) == 0 and len(
                 sa_waiting_task_list) == 0:
             with open("../buildLog/wait_task.json", "w") as f:
@@ -356,7 +347,7 @@ class getQueueUpCIList(jobHandler):
             new_cinn_waiting_task_list = self.addWaitingTaskTimeToStart(
                 cinn_waiting_task_list, cinn_running_task_list, self.cinn_ci)
 
-            new_all_waiting_task = new_v100_waiting_task_list  #+ new_p4_waiting_task_list + new_win_waiting_task_list + new_winopenblas_waiting_task_list + new_mac_waiting_task_list + new_macpy3_waiting_task_list + new_approval_waiting_task_list + new_benchmark_waiting_task_list + new_cinn_waiting_task_list
+            new_all_waiting_task = new_v100_waiting_task_list + new_p4_waiting_task_list + new_win_waiting_task_list + new_winopenblas_waiting_task_list + new_mac_waiting_task_list + new_macpy3_waiting_task_list + new_approval_waiting_task_list + new_benchmark_waiting_task_list + new_cinn_waiting_task_list
             new_all_waiting_task = self.sortTime(
                 new_all_waiting_task, 'timeToStart', reverse=False)
             with open("../buildLog/wait_task.json", "w") as f:
