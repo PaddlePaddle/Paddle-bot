@@ -5,11 +5,15 @@ from utils.readConfig import ReadConfig
 from utils.auth_ipipe import Get_ipipe_auth
 from utils.db import Database
 from utils import bosclient
+from utils.mail import Mail
+import pandas as pd
 import os
 import time
 import datetime
 import logging
+import wlist_alarm
 from tornado.httpclient import AsyncHTTPClient
+import json
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 localConfig = ReadConfig()
@@ -41,6 +45,12 @@ def ifAlreadyExist(query_stat):
     return queryTime
 
 
+def get_stageUrl(target_url):
+    pipelineBuildid = target_url.split('/')[-3]
+    stage_url = localConfig.cf.get('ipipeConf', 'stage_url') + pipelineBuildid
+    return stage_url
+
+
 def generateCiIndex(repo, sha, target_url):
     if target_url.startswith('https://xly.bce.baidu.com'):  #xly CI
         index_dict = {}
@@ -70,12 +80,16 @@ def generateCiIndex(repo, sha, target_url):
             for job in jobGroupBuildBeans:
                 jobName = job['jobName']
                 if jobName not in ['构建镜像', 'build-docker-image']:
-                    if pipelineConfName.startswith(
-                            'PR-CI-APPROVAL') or pipelineConfName.startswith(
-                                'PR-CI-Mac') or pipelineConfName.startswith(
-                                    'PR-CI-Windows'):
+                    if res['pipelineConfName'].startswith(
+                        ('PR-CI-APPROVAL', 'PR-CI-Mac', 'PR-CI-Windows')):
                         taskid = job['realJobBuild']['shellBuild']['taskId']
                         logUrl = "https://xly.bce.baidu.com/paddlepaddle/paddle-ci/sa_log/log/download/%s" % taskid
+                    elif res['pipelineConfName'].startswith(
+                        ('cinn-ci', 'PR-CI-Kunlun', 'PR-CI-OP-Benchmark',
+                         'xly-PR-CI-PY27', 'xly-PR-CI-PY35', 'PR-CI-musl')):
+                        EXCODE = 0 if job['status'] == 'SUCC' else 1
+                        index_dict['EXCODE'] = EXCODE
+                        return index_dict
                     else:
                         logParam = job['realJobBuild']['logUrl']
                         logUrl = localConfig.cf.get('ipipeConf',
@@ -87,17 +101,6 @@ def generateCiIndex(repo, sha, target_url):
     else:
         index_dict_utl = {}
     return index_dict_utl
-
-
-def getIpipeBuildLog(sha, pipelineConfName, logUrl):
-    try:
-        r = requests.get(logUrl)
-    except Exception as e:
-        print("Error: %s" % e)
-    else:
-        with open("buildLog/%s_%s.log" % (pipelineConfName, sha), "wb") as f:
-            f.write(r.content)
-            f.close
 
 
 def generateCiTime(target_url):
@@ -134,10 +137,9 @@ def generateCiTime(target_url):
                     time_dict['docker_build_endTime'] = docker_build_endTime
                 else:
                     if res['pipelineConfName'].startswith(
-                            'PR-CI-APPROVAL'
-                    ) or res['pipelineConfName'].startswith(
-                            'PR-CI-Mac') or res['pipelineConfName'].startswith(
-                                'PR-CI-Windows'):
+                        ('PR-CI-APPROVAL', 'PR-CI-Mac', 'PR-CI-Windows',
+                         'PR-CI-OP-Benchmark', 'PR-CI-Kunlun', 'cinn-ci',
+                         'PR-CI-musl')):
                         paddle_build_startTime = int(
                             str(job['realJobBuild']['shellBuild']['startTime'])
                             [:-3])  #任务开始时间
@@ -154,9 +156,10 @@ def generateCiTime(target_url):
                     time_dict[
                         'paddle_build_startTime'] = paddle_build_startTime
                     time_dict['paddle_build_endTime'] = paddle_build_endTime
-            if res['pipelineConfName'].startswith('PR-CI-APPROVAL') or res[
-                    'pipelineConfName'].startswith('PR-CI-Mac') or res[
-                        'pipelineConfName'].startswith('PR-CI-Windows'):
+            if res['pipelineConfName'].startswith(
+                ('PR-CI-APPROVAL', 'PR-CI-Mac', 'PR-CI-Windows',
+                 'PR-CI-OP-Benchmark', 'PR-CI-Kunlun', 'cinn-ci',
+                 'PR-CI-musl')):
                 waitTime_total = paddle_build_startTime - commit_createTime
                 execTime_total = paddle_build_endTime - paddle_build_startTime
             else:
@@ -169,6 +172,18 @@ def generateCiTime(target_url):
             time_dict['waitTime_total'] = waitTime_total  #排队总时间
             time_dict['execTime_total'] = execTime_total  #执行总时间
     return time_dict
+
+
+def getIpipeBuildLog(sha, pipelineConfName, logUrl):
+    try:
+        r = requests.get(logUrl)
+    except Exception as e:
+        print("Error: %s" % e)
+    else:
+        with open("buildLog/%s_%s.log" % (pipelineConfName, sha), "wb") as f:
+            f.write(r.content)
+            f.close
+        print("buildLog/%s_%s.log" % (pipelineConfName, sha))
 
 
 def get_index(index_dict, sha, pipelineConfName, target_url):
@@ -195,14 +210,16 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
     index_dict['EXCODE'] = EXCODE
     analyze_failed_cause(index_dict, target_url)  #分析PR失败原因
     if pipelineConfName.startswith(
-            'PR-CI-APPROVAL') or EXCODE == 7 or EXCODE == 2:
+        ('PR-CI-APPROVAL',
+         'PR-CI-OP-benchmark')) or EXCODE == 7 or EXCODE == 2 or EXCODE == 1:
         pass
     else:
         buildTime_strlist = data.split('Build Time:', 1)
         buildTime = buildTime_strlist[1:][0].split('s')[0].strip()
         index_dict['buildTime'] = float(buildTime)
         if filename.startswith('PR-CI-Inference'):
-            fluidInferenceSize_strlist = data.split('FLuid_Inference Size:', 1)
+            fluidInferenceSize_strlist = data.split('Paddle_Inference Size:',
+                                                    1)
             fluidInferenceSize = fluidInferenceSize_strlist[1:][0].split('M')[
                 0].strip()
             index_dict['fluidInferenceSize'] = float(fluidInferenceSize)
@@ -211,18 +228,23 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
             testFluidLibTime = testFluidLibTime_strlist[1:][0].split('s')[
                 0].strip()
             index_dict['testFluidLibTime'] = float(testFluidLibTime)
-            testFluidLibTrainTime_strlist = data.split(
-                'test_fluid_lib_train Total Time:', 1)
-            testFluidLibTrainTime = testFluidLibTrainTime_strlist[1:][0].split(
-                's')[0].strip()
-            index_dict['testFluidLibTrainTime'] = float(testFluidLibTrainTime)
+            #testFluidLibTrainTime_strlist = data.split('test_fluid_lib_train Total Time:', 1)
+            #testFluidLibTrainTime = testFluidLibTrainTime_strlist[1:][0].split('s')[0].strip()
+            #index_dict['testFluidLibTrainTime'] = float(testFluidLibTrainTime)
         elif filename.startswith('PR-CI-Coverage') or filename.startswith(
                 'PR-CI-Py3') or filename.startswith('PR-CI-CPU-Py2'):
             buildSize_strlist = data.split('Build Size:', 1)
             buildSize = buildSize_strlist[1:][0].split('G')[0].strip()
             index_dict['buildSize'] = float(buildSize)
             WhlSize_strlist = data.split('PR whl Size:', 1)
-            WhlSize = WhlSize_strlist[1:][0].split('M')[0].strip()
+            if filename.startswith('PR-CI-Coverage'):
+                if 'G' in WhlSize_strlist[1:][0].split('\n')[0]:
+                    WhlSize = WhlSize_strlist[1:][0].split('G')[0].strip()
+                    WhlSize = float(WhlSize) * 1024
+                else:
+                    WhlSize = WhlSize_strlist[1:][0].split('M')[0].strip()
+            else:
+                WhlSize = WhlSize_strlist[1:][0].split('M')[0].strip()
             index_dict['WhlSize'] = float(WhlSize)
             if filename.startswith('PR-CI-Coverage') or filename.startswith(
                     'PR-CI-Py3'):
@@ -268,39 +290,49 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
                     )) if int(item.split('s')[0].strip(
                     )) > testCaseTime_total else testCaseTime_total
                 index_dict['testCaseTime_total'] = testCaseTime_total
+            #收集ccache
+            if pipelineConfName == 'PR-CI-Coverage':
+                ccacheRate_strlist = data.split('ccache hit rate:', 1)
+                ccacheRate = ccacheRate_strlist[1:][0].split('%')[0].strip()
+                index_dict['ccacheRate'] = float(ccacheRate)
         elif filename.startswith('PR-CI-Mac'):
             testCaseTime_mac_strlist = data.split('Mac testCase Time:')
             testCaseTime_mac = int(testCaseTime_mac_strlist[1:][0].split('s')[
                 0].strip())
             index_dict['testCaseTime_total'] = testCaseTime_mac
         elif filename.startswith('PR-CI-Windows'):
-            fluidInferenceSize_strlist = data.split('FLuid_Inference Size:', 2)
-            fluidInferenceSize = fluidInferenceSize_strlist[2].split('G')[
+            fluidInferenceSize_strlist = data.split(
+                'Windows Paddle_Inference Size:', 1)
+            fluidInferenceSize = fluidInferenceSize_strlist[1].split('M')[
                 0].strip()
             index_dict['fluidInferenceSize'] = float(fluidInferenceSize)
-            WhlSize_strlist = data.split('PR whl Size:', 2)
-            WhlSize = WhlSize_strlist[2].split('M')[0].strip()
+            WhlSize_strlist = data.split('PR whl Size:', 1)
+            WhlSize = WhlSize_strlist[1].split('M')[0].strip()
             index_dict['WhlSize'] = float(WhlSize)
-            if not filename.startswith('PR-CI-Windows-OPENBLAS'):
-                testCaseCount_single_strlist = data.split(
-                    'Windows 1 card TestCases count is')
-                testCaseCount_single = int(testCaseCount_single_strlist[-1]
-                                           .split('\n')[0].strip())
-                index_dict['testCaseCount_single'] = testCaseCount_single
-                testCaseCount_total = testCaseCount_single
-                index_dict['testCaseCount_total'] = testCaseCount_total
-                testCaseTime_single_strlist = data.split(
-                    'Windows 1 card TestCases Total Time:')
-                testCaseTime_single = int(testCaseTime_single_strlist[1:][0]
-                                          .split('s')[0].strip())
-                index_dict['testCaseTime_single'] = testCaseTime_single
-                testCaseTime_win_strlist = data.split(
-                    'Windows TestCases Total Time:')
-                testCaseTime_win = int(testCaseTime_win_strlist[1:][0].split(
-                    's')[0].strip())
-                index_dict['testCaseTime_total'] = testCaseTime_win
+            testCaseTime_single_strlist = data.split(
+                'Windows 1 card TestCases Total Time:')
+            testCaseTime_single = int(testCaseTime_single_strlist[1:][0].split(
+                's')[0].strip())
+            index_dict['testCaseTime_single'] = testCaseTime_single
+            testCaseTime_win_strlist = data.split(
+                'Windows TestCases Total Time:')
+            testCaseTime_win = int(testCaseTime_win_strlist[1:][0].split('s')[
+                0].strip())
+            index_dict['testCaseTime_total'] = testCaseTime_win
+            if pipelineConfName in ['PR-CI-Windows', 'PR-CI-Windows-OPENBLAS']:
+                buildCache_strlist = data.split('Windows build cache', 3)
+                buildCache = 1 if buildCache_strlist[1:][0].split('\n')[
+                    0].strip() == True else 0
+                index_dict['buildCache'] = int(buildCache)
+            '''
+            testCaseCount_single_strlist = data.split('Windows 1 card TestCases count is')
+            testCaseCount_single = int(testCaseCount_single_strlist[-1].split('\n')[0].strip())
+            index_dict['testCaseCount_single'] = testCaseCount_single
+            testCaseCount_total = testCaseCount_single
+            index_dict['testCaseCount_total'] = testCaseCount_total
+            '''
     f.close()
-    if EXCODE != 7:  #build error Not in paddle_ci_index
+    if EXCODE != 7 or EXCODE == 2:  #build error Not in paddle_ci_index
         insertTime = int(time.time())
         query_stat = "SELECT * FROM paddle_ci_index WHERE ciName='%s' and commitId='%s' and PR=%s order by time desc" % (
             index_dict['ciName'], index_dict['commitId'], index_dict['PR'])
@@ -325,7 +357,8 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
 
 def analyze_failed_cause(index_dict, target_url):
     EXCODE = index_dict['EXCODE']
-    if EXCODE == 8:  #单测失败原因
+    if EXCODE == 8 and index_dict[
+            'ciName'] not in ['PR-CI-OP-benchmark-TEST']:  #单测失败原因
         testsfailed_list = []
         WLIST_PR = wlist_alarm.wlist_pr
         WLIST_UT = wlist_alarm.wlist_ut
@@ -479,7 +512,7 @@ def sendAlarmMail(alarm_ut_dict):
         HTML_CONTENT = HTML_CONTENT + TABLE_CONTENT + "</tbody> </table> </body></html> "
         mail = Mail()
         mail.set_sender('paddlepaddle_bot@163.com')
-        mail.set_receivers(['xxxx@163.com'])
+        mail.set_receivers(['xxx@baidu.com'])
         mail.set_title('[告警] CI单测挂了三次以上！')
         mail.set_message(HTML_CONTENT, messageType='html', encoding='gb2312')
         mail.send()
@@ -488,6 +521,6 @@ def sendAlarmMail(alarm_ut_dict):
 def create_failed_cause_csv(failed_cause_file):
     df = pd.DataFrame(columns=[
         'TIME', 'PR', 'COMMITID', 'CINAME', 'EXCODE', 'FAILED_MESSAGE',
-        'ERROR_COUNT'
+        'ERROR_COUNT', 'CIURL'
     ])
     df.to_csv(failed_cause_file)
