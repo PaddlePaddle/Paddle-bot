@@ -101,6 +101,30 @@ class xlyHandler(object):
             rerun_url, param=query_param, headers=headers)
         return res
 
+    def getAllResource(self):
+        """PaddlePaddle下所有的SA资源"""
+        url = 'https://xly.bce.baidu.com/open-api/sa_server/sa/open/api/rest/v2/labels/details?groupName=paddlepaddle'
+        headers = {
+            "Content-Type": "application/json",
+            "IPIPE-UID": "Paddle-bot"
+        }
+        query_param = 'groupName=paddlepaddle'
+        res = xlyOpenApiRequest().get_method(
+            url, param=query_param, headers=headers)
+        return res
+
+    def getConcurrenceByResourceId(self, labelid):
+        """根据资源id获取当前并发数"""
+        query_param = 'groupName=paddlepaddle&origin=SELF&labelId=%s' % labelid
+        url = 'https://xly.bce.baidu.com/open-api/sa_server/sa/open/api/rest/v2/agents/details?%s' % query_param
+        headers = {
+            "Content-Type": "application/json",
+            "IPIPE-UID": "Paddle-bot"
+        }
+        res = xlyOpenApiRequest().get_method(
+            url, param=query_param, headers=headers)
+        return res
+
 
 class PRHandler(object):
     """PR/commit处理"""
