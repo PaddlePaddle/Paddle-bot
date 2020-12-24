@@ -1,6 +1,7 @@
 import json
 import sys
 sys.path.append("..")
+from utils.resource import Resource
 from utils.mail import Mail
 
 
@@ -8,16 +9,22 @@ class ExceptionWaitingJob():
     """异常排队作业"""
 
     def __init__(self):
-        self.__longest_waiting_default = 60
-        self.__v100_count = 17
-        self.__p4_count = 5
-        self.__mac_count = 4
-        self.__macpy3_count = 3
-        self.__win_count = 14
-        self.__winopenblas_count = 9
-        self.__approval_count = 1
-        self.__benchmark_count = 1
-        self.__cinn_count = 1
+        self.required_labels = [
+            'nTeslaV100-16', 'nTeslaP4', 'Paddle-mac', 'Paddle-mac-py3',
+            'Paddle-windows', 'Paddle-windows-cpu', 'Paddle-approval-cpu',
+            'Paddle-benchmark-P40', 'Paddle-Kunlun', 'Paddle-musl'
+        ]
+        self.__resource = self.getEachResource()
+        self.__longest_waiting_default = 30
+
+    def getEachResourceDict(self):
+        ResourceDict = {}
+        for label in self.required_labels:
+            if label not in ['nTeslaV100-16', 'nTeslaP4']:
+                ResourceDict[label] = self.__resource[label]
+        ResourceDict['nTeslaV100-16'] = 17
+        ResourceDict['nTeslaP4'] = 5
+        return ResourceDict
 
     def classifyTaskByCardType(self, task_list, cardType):
         """
@@ -28,16 +35,12 @@ class ExceptionWaitingJob():
         Returns:
             cardType_task_list: .
         """
+        print("cardType: %s" % cardType)
         task_list_by_card = []
         for task in task_list:
-            if cardType == 'mac' and task['CIName'].startswith(
-                    'PR-CI-Mac-Python3'):
-                continue
-            if cardType == 'win' and task['CIName'].startswith(
-                    'PR-CI-Windows-OPENBLAS'):
-                continue
-            if cardType.lower() in task['cardType'].lower():
+            if task['label'] == cardType:
                 task_list_by_card.append(task)
+        print(task_list_by_card)
         return len(task_list_by_card)
 
     def getRunningJobSize(self):
@@ -45,27 +48,12 @@ class ExceptionWaitingJob():
         this function will get size of running job list in different types.
         """
         running_job_size = {}
-        with open("../buildLog/running_task.json", 'r') as load_f:
-            all_running_task = json.load(load_f)
-            load_f.close()
-        running_job_size['v100'] = self.classifyTaskByCardType(
-            all_running_task, 'v100')
-        running_job_size['p4'] = self.classifyTaskByCardType(all_running_task,
-                                                             'p4')
-        running_job_size['win'] = self.classifyTaskByCardType(all_running_task,
-                                                              'win')
-        running_job_size['winopenblas'] = self.classifyTaskByCardType(
-            all_running_task, 'winopenblas')
-        running_job_size['mac'] = self.classifyTaskByCardType(all_running_task,
-                                                              'mac')
-        running_job_size['macpy3'] = self.classifyTaskByCardType(
-            all_running_task, 'macpy3')
-        running_job_size['approval'] = self.classifyTaskByCardType(
-            all_running_task, 'approval')
-        running_job_size['benchmark'] = self.classifyTaskByCardType(
-            all_running_task, 'benchmark')
-        running_job_size['cinn'] = self.classifyTaskByCardType(
-            all_running_task, 'cinn')
+        xly_container_running_task_list = self.getJobList('running')
+        sa_container_running_task_list = self.getJobList('sarunning')
+        all_running_task = xly_container_running_task_list + sa_container_running_task_list
+        for label in self.required_labels:
+            running_job_size[label] = self.classifyTaskByCardType(
+                all_running_task, label)
         print(running_job_size)
         return running_job_size
 
@@ -74,68 +62,27 @@ class ExceptionWaitingJob():
         this function will get Exception WaitingJob.
         """
         running_job_size = self.getRunningJobSize()
+        ResourceDict = self.getEachResourceDict()
         with open("../buildLog/wait_task.json", 'r') as load_f:
             all_waiting_task = json.load(load_f)
             load_f.close()
-        mailBeginning = "<html><body><p>Hi, ALL:</p> <p>以下任务已等待超过60min, 且对应的资源并不是全在使用, 请及时查看.</p><table border='1' align=center> <caption><font size='3'><b>等待超过60min的任务列表</b></font></caption><tr align=center><td bgcolor='#d0d0d0'>PR</td><td bgcolor='#d0d0d0'>CIName</td><td bgcolor='#d0d0d0'>已等待时间/min</td><td bgcolor='#d0d0d0'>使用资源</td><td bgcolor='#d0d0d0'>实际使用资源个数/个</td><td bgcolor='#d0d0d0'>资源全量/个</td><td bgcolor='#d0d0d0'>repo</td></tr>"
+        mailBeginning = "<html><body><p>Hi, ALL:</p> <p>以下任务已等待超过30min, 且对应的资源并不是全在使用, 请及时查看.</p><table border='1' align=center> <caption><font size='3'><b>等待超过60min的任务列表</b></font></caption><tr align=center><td bgcolor='#d0d0d0'>PR</td><td bgcolor='#d0d0d0'>CIName</td><td bgcolor='#d0d0d0'>已等待时间/min</td><td bgcolor='#d0d0d0'>使用资源</td><td bgcolor='#d0d0d0'>实际使用资源个数/个</td><td bgcolor='#d0d0d0'>资源全量/个</td><td bgcolor='#d0d0d0'>repo</td></tr>"
         mailContent = ''
         for task in all_waiting_task:
             if task['waiting'] > self.__longest_waiting_default:
-                if 'v100' in task['cardType'].lower():
-                    real_use_count = running_job_size['v100']
-                    resource_count = self.__v100_count
-                    isAbnormal = self.getIsAbnormal(resource_count,
-                                                    real_use_count)
-                elif 'p4' in task['cardType'].lower():
-                    real_use_count = running_job_size['p4']
-                    resource_count = self.__p4_count
-                    isAbnormal = self.getIsAbnormal(resource_count,
-                                                    real_use_count)
-                elif 'mac' in task['cardType'].lower() and not task[
-                        'CIName'].startswith('PR-CI-Mac-Python3'):
-                    real_use_count = running_job_size['mac']
-                    resource_count = self.__mac_count
-                    isAbnormal = self.getIsAbnormal(resource_count,
-                                                    real_use_count)
-                elif 'macpy3' in task['cardType'].lower():
-                    real_use_count = running_job_size['macpy3']
-                    resource_count = self.__macpy3_count
-                    isAbnormal = self.getIsAbnormal(resource_count,
-                                                    real_use_count)
-                elif 'win' in task['cardType'].lower() and not task[
-                        'CIName'].startswith('PR-CI-Windows-OPENBLAS'):
-                    real_use_count = running_job_size['win']
-                    resource_count = self.__win_count
-                    isAbnormal = self.getIsAbnormal(resource_count,
-                                                    real_use_count)
-                elif 'winopenblas' in task['cardType'].lower():
-                    real_use_count = running_job_size['winopenblas']
-                    resource_count = self.__winopenblas_count
-                    isAbnormal = self.getIsAbnormal(resource_count,
-                                                    real_use_count)
-                elif 'approval' in task['cardType'].lower():
-                    real_use_count = running_job_size['approval']
-                    resource_count = self.__approval_count
-                    isAbnormal = self.getIsAbnormal(resource_count,
-                                                    real_use_count)
-                elif 'benchmark' in task['cardType'].lower():
-                    real_use_count = running_job_size['benchmark']
-                    resource_count = self.__benchmark_count
-                    isAbnormal = self.getIsAbnormal(resource_count,
-                                                    real_use_count)
-                elif 'cinn' in task['cardType'].lower():
-                    real_use_count = running_job_size['cinn']
-                    resource_count = self.__cinn_count
-                    isAbnormal = self.getIsAbnormal(resource_count,
-                                                    real_use_count)
-                else:
-                    print('OTHER TYPE %s: %s' % (task['cardType'], task))
-                    isAbnormal = False
-                if isAbnormal == True:
-                    mailContent += "<tr align=center><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
-                        task['PR'], task['CIName'], task['waiting'],
-                        task['cardType'], real_use_count, resource_count,
-                        task['repoName'])
+                for label in self.required_labels:
+                    if task['cardType'] == label:
+                        real_use_count = running_job_size[label]
+                        resource_count = ResourceDict[label]
+                        isAbnormal = self.getIsAbnormal(resource_count,
+                                                        real_use_count)
+                        if isAbnormal == True:
+                            mailContent += "<tr align=center><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+                                task['PR'], task['CIName'], task['waiting'],
+                                task['cardType'], real_use_count,
+                                resource_count, task['repoName'])
+        print("mailContent")
+        print(mailContent)
         if mailContent != '':
             mailDetails = mailBeginning + mailContent + '</body></html>'
             self.sendMail(mailDetails)
@@ -148,6 +95,7 @@ class ExceptionWaitingJob():
         """
         isAbnormal = False
         ratio = (default_count - running_count) / default_count
+        print('ratio: %s' % ratio)
         if ratio > 0.25:
             isAbnormal = True
         return isAbnormal
