@@ -2,12 +2,14 @@ import os
 import aiohttp
 import asyncio
 import json
+import time
 import datetime
 import logging
 import gidgethub
 import requests
 from gidgethub import aiohttp as gh_aiohttp
 import sys
+import pandas as pd
 sys.path.append("..")
 from utils.auth import get_jwt, get_installation, get_installation_access_token
 from utils.test_auth_ipipe import xlyOpenApiRequest
@@ -18,12 +20,11 @@ logging.basicConfig(
     filename='../logs/regularMark.log',
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 localConfig = ReadConfig(path='../conf/config.ini')
 
 
 class MarkTimeoutCI(object):
-    """超时PR标记失败"""
-
     def __init__(self, user, repo, gh):
         self.pr_url = 'https://api.github.com/repos/%s/%s/pulls?per_page=100&page=1&q=addClass' % (
             user, repo)
@@ -75,6 +76,7 @@ class MarkTimeoutCI(object):
                     item_dic['status_url'] = item['statuses_url']
                     overduelist.append(item_dic)
             self.pr_url = self.getNextUrl(header['link'])
+        print("before %s's PRs: %s" % (seven_Days_ago, overduelist))
         logger.info("before %s's PRs: %s" % (seven_Days_ago, overduelist))
         return overduelist
 
@@ -96,7 +98,8 @@ class MarkTimeoutCI(object):
             commit_ci_status['commit'] = item['commit']
             status_url = item['status_url']
             res = requests.get(status_url,
-                               headers={'authorization': "token xxxx"}).json()
+                               headers={'authorization': "token xxx"},
+                               timeout=15).json()
             commit_ci_status['CI'] = []
             if_before_seven_day = []  #标记是否所有的CI都是7天之前的
             for ci in res:
@@ -140,10 +143,10 @@ class MarkTimeoutCI(object):
             "IPIPE-UID": "Paddle-bot"
         }
         for item in CIStatusList:
-            MARK_List = []
             PR = item['PR']
             commit = item['commit']
             ci_list = item['CI']
+            mark_ci_list = []
             for ci in ci_list:
                 if ci['ciName'] in REQUIRED_CI and ci[
                         'status'] in ['success', 'pending']:
@@ -152,26 +155,59 @@ class MarkTimeoutCI(object):
                     res = xlyOpenApiRequest().post_method(
                         mark_url, json_str, headers=headers)
                     if res.status_code == 200 or res.status_code == 201:
-                        MARK_List.append(True)
+                        mark_ci_list.append(ci['ciName'])
                         print('%s_%s_%s mark success!' %
                               (PR, commit, ci['ciName']))
-                        logger.error('%s_%s_%s mark success!' %
-                                     (PR, commit, ci['ciName']))
+                        logger.info('%s_%s_%s mark success!' %
+                                    (PR, commit, ci['ciName']))
                     else:
-                        MARK_List.append(False)
                         print('%s_%s_%s mark failed!' %
                               (PR, commit, ci['ciName']))
                         logger.error('%s_%s_%s mark failed!' %
                                      (PR, commit, ci['ciName']))
-            if True in MARK_List:
-                await self.inform(item)
+            if len(mark_ci_list) > 0:
+                data = {
+                    'TIME': time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
+                    'PR': PR,
+                    'COMMITID': commit,
+                    'CINAME': mark_ci_list
+                }
+                self.save_markci_job(data)
+                marked = self.queryIfHasMark(PR, commit)
+                if marked == False:
+                    self.inform(item)
+                else:
+                    print('%s_%s has marked!!!!' % (PR, commit))
+                    logger.info('%s_%s has marked!!!!' % (PR, commit))
+
+    def queryIfHasMark(self, PR, commitid):
+        """marked 是否已经标记过"""
+        marked = True
+        df = pd.read_csv('../buildLog/mark_timeout_ci.csv')
+        queryKey = df[(df['PR'] == PR) & (df['COMMITID'] == commitid)]
+        if queryKey.empty:
+            marked = False
+        return marked
+
+    def create_markci_csv(self, filename):
+        """创建存储文件"""
+        df = pd.DataFrame(columns=['TIME', 'PR', 'COMMITID', 'CINAME'])
+        df.to_csv(filename)
+
+    def save_markci_job(self, data):
+        """将kill的任务存到"""
+        filename = '../buildLog/mark_timeout_ci.csv'
+        if os.path.exists(filename) == False:
+            self.create_markci_csv(filename)
+        write_data = pd.DataFrame(data)
+        write_data.to_csv(filename, mode='a', header=False)
 
     async def inform(self, item):
         """Paddle-bot发出评论"""
+        #POST /repos/:owner/:repo/issues/:issue_number/comments
         rerun_ci_link = self.rerun_url.format(item['PR'], item['commit'])
         comment_url = self.comment_url.format(item['PR'])
         shortId = item['commit'][0:7]
-        #message = "Sorry to inform you that %s's CIs have passed for more than 7 days. To prevent PR conflicts, you need to re-run all CIs. You can re-run it manually, or you can click [`here`](%s) to re-run automatically." %(shortId, rerun_ci_link)
         message = "Sorry to inform you that %s's CIs have passed for more than 7 days. To prevent PR conflicts, you need to re-run all CIs manually. " % shortId
         await self.gh.post(comment_url, data={"body": message})
 
