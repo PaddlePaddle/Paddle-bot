@@ -217,6 +217,13 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
         buildTime_strlist = data.split('Build Time:', 1)
         buildTime = buildTime_strlist[1:][0].split('s')[0].strip()
         index_dict['buildTime'] = float(buildTime)
+        if pipelineConfName in [
+                'PR-CI-Coverage', 'PR-CI-Py3', 'PR-CI-CPU-Py2',
+                'PR-CI-Inference', 'PR-CI-Mac', 'PR-CI-Mac-Python3'
+        ]:
+            ccacheRate_strlist = data.split('ccache hit rate:', 1)
+            ccacheRate = ccacheRate_strlist[1:][0].split('%')[0].strip()
+            index_dict['ccacheRate'] = float(ccacheRate)
         if filename.startswith('PR-CI-Inference'):
             fluidInferenceSize_strlist = data.split('Paddle_Inference Size:',
                                                     1)
@@ -248,53 +255,83 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
             index_dict['WhlSize'] = float(WhlSize)
             if filename.startswith('PR-CI-Coverage') or filename.startswith(
                     'PR-CI-Py3'):
-                testCaseCount_single_strlist = data.split(
-                    '1 card TestCases count is')
-                testCaseCount_single = 0
-                for item in testCaseCount_single_strlist[1:]:  #原因是单卡的case分了两部分
-                    testCaseCount_single += int(item.split('\n')[0].strip())
-                index_dict['testCaseCount_single'] = testCaseCount_single
-                testCaseCount_multi_strlist = data.split(
-                    '2 card TestCases count is')
-                testCaseCount_multi = int(testCaseCount_multi_strlist[1:][0]
-                                          .split('\n')[0].strip())
-                index_dict['testCaseCount_multi'] = testCaseCount_multi
-                testCaseCount_exclusive_strlist = data.split(
-                    'exclusive TestCases count is')
-                testCaseCount_exclusive = int(testCaseCount_exclusive_strlist[
-                    1:][0].split('\n')[0].strip())
-                index_dict['testCaseCount_exclusive'] = testCaseCount_exclusive
-                testCaseCount_total = testCaseCount_single + testCaseCount_multi + testCaseCount_exclusive
-                index_dict['testCaseCount_total'] = testCaseCount_total
-                testCaseTime_single_strlist = data.split(
-                    '1 card TestCases Total Time:')
-                testCaseTime_single = 0
-                for item in testCaseTime_single_strlist[1:]:  #原因是单卡的case分了两部分
-                    testCaseTime_single += int(item.split('s')[0].strip())
-                index_dict['testCaseTime_single'] = testCaseTime_single
-                testCaseTime_multi_strlist = data.split(
-                    '2 card TestCases Total Time:')
-                testCaseTime_multi = int(testCaseTime_multi_strlist[1:][0]
-                                         .split('s')[0].strip())
-                index_dict['testCaseTime_multi'] = testCaseTime_multi
-                testCaseTime_exclusive_strlist = data.split(
-                    'exclusive TestCases Total Time:')
-                testCaseTime_exclusive = int(testCaseTime_exclusive_strlist[1:]
-                                             [0].split('s')[0].strip())
-                index_dict['testCaseTime_exclusive'] = testCaseTime_exclusive
-                testCaseTime_total_strlist = data.split(
-                    'TestCases Total Time:')
-                testCaseTime_total = 0
-                for item in testCaseTime_total_strlist[1:]:
-                    testCaseTime_total = int(item.split('s')[0].strip(
-                    )) if int(item.split('s')[0].strip(
-                    )) > testCaseTime_total else testCaseTime_total
-                index_dict['testCaseTime_total'] = testCaseTime_total
-            #收集ccache
-            if pipelineConfName == 'PR-CI-Coverage':
-                ccacheRate_strlist = data.split('ccache hit rate:', 1)
-                ccacheRate = ccacheRate_strlist[1:][0].split('%')[0].strip()
-                index_dict['ccacheRate'] = float(ccacheRate)
+                if 'in PRECISION_TEST' in data:  #命中精致测试 只拿testCaseTime_total
+                    index_dict['PRECISION_TEST'] = True
+                    if index_dict['EXCODE'] == 8:
+                        testCaseTime_total = index_dict[
+                            'testCaseTime_single'] + index_dict[
+                                'testCaseTime_multi'] + index_dict[
+                                    'testCaseTime_exclusive']
+                    else:
+                        testCaseTime_total_strlist = data.split(
+                            'TestCases Total Time:')
+                        testCaseTime_total = 0
+                        for item in testCaseTime_total_strlist[1:]:
+                            testCaseTime_total = int(
+                                item.split('s')[0].strip(
+                                )) if int(item.split('s')[0].strip(
+                                )) > testCaseTime_total else testCaseTime_total
+                        index_dict['testCaseTime_total'] = testCaseTime_total
+                    logger.info("in PRECISION_TEST!! : %s" % index_dict)
+                else:
+                    index_dict['PRECISION_TEST'] = False
+                    testCaseCount_single_strlist = data.split(
+                        '1 card TestCases count is')
+                    testCaseCount_single = 0
+                    for item in testCaseCount_single_strlist[
+                            1:]:  #原因是单卡的case分了两部分
+                        testCaseCount_single += int(
+                            item.split('\n')[0].strip())
+                    index_dict['testCaseCount_single'] = testCaseCount_single
+                    testCaseCount_multi_strlist = data.split(
+                        '2 card TestCases count is')
+                    testCaseCount_multi = int(testCaseCount_multi_strlist[1:][
+                        0].split('\n')[0].strip())
+                    index_dict['testCaseCount_multi'] = testCaseCount_multi
+                    testCaseCount_exclusive_strlist = data.split(
+                        'exclusive TestCases count is')
+                    testCaseCount_exclusive = int(
+                        testCaseCount_exclusive_strlist[1:][0].split('\n')[
+                            0].strip())
+                    index_dict[
+                        'testCaseCount_exclusive'] = testCaseCount_exclusive
+                    testCaseCount_total = testCaseCount_single + testCaseCount_multi + testCaseCount_exclusive
+                    index_dict['testCaseCount_total'] = testCaseCount_total
+                    testCaseTime_single_strlist = data.split(
+                        '1 card TestCases Total Time:')
+                    testCaseTime_single = 0
+                    for item in testCaseTime_single_strlist[
+                            1:]:  #原因是单卡的case分了两部分
+                        testCaseTime_single += int(item.split('s')[0].strip())
+                    index_dict['testCaseTime_single'] = testCaseTime_single
+                    testCaseTime_multi_strlist = data.split(
+                        '2 card TestCases Total Time:')
+                    testCaseTime_multi = int(testCaseTime_multi_strlist[1:][0]
+                                             .split('s')[0].strip())
+                    index_dict['testCaseTime_multi'] = testCaseTime_multi
+                    testCaseTime_exclusive_strlist = data.split(
+                        'exclusive TestCases Total Time:')
+                    testCaseTime_exclusive = int(
+                        testCaseTime_exclusive_strlist[1:][0].split('s')[
+                            0].strip())
+                    index_dict[
+                        'testCaseTime_exclusive'] = testCaseTime_exclusive
+                    if index_dict['EXCODE'] == 8:
+                        testCaseTime_total = index_dict[
+                            'testCaseTime_single'] + index_dict[
+                                'testCaseTime_multi'] + index_dict[
+                                    'testCaseTime_exclusive']
+                    else:
+                        testCaseTime_total_strlist = data.split(
+                            'TestCases Total Time:')
+                        testCaseTime_total = 0
+                        for item in testCaseTime_total_strlist[1:]:
+                            testCaseTime_total = int(
+                                item.split('s')[0].strip(
+                                )) if int(item.split('s')[0].strip(
+                                )) > testCaseTime_total else testCaseTime_total
+                        index_dict['testCaseTime_total'] = testCaseTime_total
+
         elif filename.startswith('PR-CI-Mac'):
             testCaseTime_mac_strlist = data.split('Mac testCase Time:')
             testCaseTime_mac = int(testCaseTime_mac_strlist[1:][0].split('s')[
