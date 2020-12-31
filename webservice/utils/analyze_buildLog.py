@@ -535,7 +535,7 @@ def sendAlarmMail(alarm_ut_dict):
         with open("buildLog/lastestfaileduts.json", "w") as f:
             json.dump(alarm_ut_dict, f)
             f.close
-        HTML_CONTENT = "<html> <head></head> <body>  <p>Hi, ALL:</p>  <p>以下单测已经在今天挂在3个不同的PR，请QA同学及时revert或disable该单测，并进行排查。</p>"
+        HTML_CONTENT = "<html> <head></head> <body>  <p>Hi, ALL:</p>  <p>以下单测已经在今天挂在3个不同的PR，请QA同学及时revert或disable该单测，并进行排查。</p><p>ps: 绿色背景的数据是本次新增的失败单测。</p>"
         TABLE_CONTENT = '<table border="1" align="center"> <caption> <font size="3"><b>单测失败列表</b></font>  </caption> <tbody> <tr align="center"> <td bgcolor="#d0d0d0">单测</td> <td bgcolor="#d0d0d0">PR</td> <td bgcolor="#d0d0d0"> commitID</td> <td bgcolor="#d0d0d0"> CIName</td> <td bgcolor="#d0d0d0">xly_url</td></tr> '
         for ut in alarm_ut_dict:
             for l in alarm_ut_dict[ut]:
@@ -544,9 +544,17 @@ def sendAlarmMail(alarm_ut_dict):
                 commit = message[1]
                 ciname = message[2]
                 ciurl = message[3]
-                TABLE_CONTENT += '<tr align="center"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
-                    ut, pr, commit, ciname, ciurl)
-        HTML_CONTENT = HTML_CONTENT + TABLE_CONTENT + "</tbody> </table> </body></html> "
+                if ut not in lastestfaileduts:
+                    TABLE_CONTENT += '<tr align="center" bgcolor="#b5c4b1"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
+                        ut, pr, commit, ciname, ciurl)
+                else:
+                    if l not in lastestfaileduts[ut]:
+                        TABLE_CONTENT += '<tr align="center" bgcolor="#b5c4b1"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
+                            ut, pr, commit, ciname, ciurl)
+                    else:
+                        TABLE_CONTENT += '<tr align="center"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
+                            ut, pr, commit, ciname, ciurl)
+        HTML_CONTENT = HTML_CONTENT + TABLE_CONTENT + "</tbody> </table> </body></html>"
         mail = Mail()
         mail.set_sender('paddlepaddle_bot@163.com')
         mail.set_receivers(['xxx@baidu.com'])
