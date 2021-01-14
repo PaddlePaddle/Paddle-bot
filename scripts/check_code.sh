@@ -28,7 +28,7 @@ PADDLEBOT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}")/.." && pwd )"
 echo ${PADDLEBOT_ROOT}
 
 function prepare_env(){
-    pip install pre-commit==2.2 pylint==2.6 -i https://pypi.tuna.tsinghua.edu.cn/simple
+    pip3 install pre-commit==2.2 pylint==2.6 -i https://pypi.tuna.tsinghua.edu.cn/simple
 }
 
 function abort(){
