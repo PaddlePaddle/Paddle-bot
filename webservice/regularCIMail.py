@@ -20,7 +20,7 @@ class WeeklyCIIndex():
         self.countTypeCIindex = [
             'fluidInferenceSize', 'WhlSize', 'buildSize',
             'testCaseCount_total', 'testCaseCount_single',
-            'testCaseCount_multi', 'testCaseCount_exclusive'
+            'testCaseCount_multi', 'testCaseCount_exclusive', 'ccacheRate'
         ]
         self.requiredCIName = [
             'PR-CI-Coverage', 'PR-CI-Py3', 'PR-CI-Inference', 'PR-CI-CPU-Py2',
@@ -41,6 +41,7 @@ class WeeklyCIIndex():
             "CI任务的平均排队时间/min": "xly_average_wait_time_all_commit",
             "CI任务的平均执行时间/min": "xly_average_exec_time_all_commit",
             "CI任务的平均编译时间/min": "xly_buildTime_all_commit",
+            "平均ccache命中率/%": "xly_ccacheRate",
             "CI任务的平均单测时间/min": "xly_testCaseTime_total_all_commit",
             "平均rerun率/%": "xly_rerunRate",
             "平均失败率/%": "xly_failRate"
@@ -467,9 +468,13 @@ class WeeklyCIIndex():
                         'PR-CI-Inference', 'PR-CI-CPU-Py2', 'FluidDoc1'
                 ]:
                     InternalKeyIndexContent += "<td>None</td>"
+                elif index == '平均ccache命中率/%' and ci in [
+                        'PR-CI-Windows', 'PR-CI-Windows-OPENBLAS'
+                ]:
+                    InternalKeyIndexContent += "<td>None</td>"
                 else:
                     key = self.keyIndexDict[index].replace('xly', ci)
-                    if index in ['平均rerun率/%', '平均失败率/%']:
+                    if index in ['平均rerun率/%', '平均失败率/%', 'ccache平均命中率/%']:
                         # 这俩参数已经是百分率了
                         thisWeek_lastWeek_radio = float(ciIndex_thisWeek[
                             key]) - float(ciIndex_lastWeek[key])
@@ -494,7 +499,7 @@ class WeeklyCIIndex():
                                          ciIndex_lastWeek[key])
 
                     if thisWeek_lastWeek_radio >= 0:
-                        if index in ['平均rerun率/%', '平均失败率/%']:
+                        if index in ['平均rerun率/%', '平均失败率/%', 'ccache平均命中率/%']:
                             value = value + ' |↑%.2f' % (
                                 thisWeek_lastWeek_radio) + '%'
                             standard_radio = 5  #本身已经是百分率了
@@ -529,9 +534,10 @@ class WeeklyCIIndex():
     def getInternalDetailIndex(self, ciIndex_thisWeek, ciIndex_lastWeek=0):
         """获取内部本周详细指标"""
         InternalDetailIndexContent = "<table border='1' align=center> <caption><font size='3'><b>效率云对内详细指标</b></font></caption>"
-        ci_index_dic = {"05CI任务的平均耗时/min": "ci_average_consum_time_all_commit", \
-            "06CI任务的平均排队时间/min": "ci_average_wait_time_all_commit", "07CI任务的平均执行时间/min": "ci_average_exec_time_all_commit", \
-            "08平均编译时间/min": "ci_buildTime_all_commit", "09平均单测时间/min": "ci_testCaseTime_total_all_commit", "10平均测试预测库时间/min": "ci_testFluidLibTime", \
+        ci_index_dic = {"04CI任务的平均耗时/min": "ci_average_consum_time_all_commit", \
+            "05CI任务的平均排队时间/min": "ci_average_wait_time_all_commit", "06CI任务的平均执行时间/min": "ci_average_exec_time_all_commit", \
+            "07平均编译时间/min": "ci_buildTime_all_commit", "08平均ccache命中率/%": "ci_ccacheRate", \
+            "09平均单测时间/min": "ci_testCaseTime_total_all_commit", "10平均测试预测库时间/min": "ci_testFluidLibTime", \
             "11平均测试训练库时间/min": "ci_testFluidLibTrainTime", "12平均预测库大小/M": "ci_fluidInferenceSize", "13平均whl大小/M": "ci_WhlSize", \
             "14平均build目录大小/G": "ci_buildSize", "15单测总数/个": "ci_testCaseCount_total", "16单卡case总数/个": "ci_testCaseCount_single", \
             "17单卡case执行时间/min": "ci_testCaseTime_single", "18多卡case总数/个": "ci_testCaseCount_multi", "19多卡case执行时间/min": "ci_testCaseTime_multi", \
@@ -556,6 +562,10 @@ class WeeklyCIIndex():
             for ci_name in self.requiredCIName:
                 if key == '平均单测时间/min' and ci_name in [
                         'PR-CI-Inference', 'PR-CI-CPU-Py2', 'FluidDoc1'
+                ]:
+                    InternalDetailIndexContent += "<td>None</td>"
+                elif key == '平均ccache命中率/%' and ci_name in [
+                        'PR-CI-Windows', 'PR-CI-Windows-OPENBLAS'
                 ]:
                     InternalDetailIndexContent += "<td>None</td>"
                 else:

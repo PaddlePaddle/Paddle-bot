@@ -359,7 +359,7 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
             if pipelineConfName in ['PR-CI-Windows', 'PR-CI-Windows-OPENBLAS']:
                 buildCache_strlist = data.split('Windows build cache', 3)
                 buildCache = 1 if buildCache_strlist[1:][0].split('\n')[
-                    0].strip() == True else 0
+                    0].strip() == "TRUE" else 0
                 index_dict['buildCache'] = int(buildCache)
             '''
             testCaseCount_single_strlist = data.split('Windows 1 card TestCases count is')
