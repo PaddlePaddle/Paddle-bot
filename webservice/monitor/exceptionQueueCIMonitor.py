@@ -1,4 +1,5 @@
 import json
+import time
 import sys
 sys.path.append("..")
 from utils.resource import Resource
@@ -66,7 +67,6 @@ class ExceptionWaitingJob():
         with open("../buildLog/wait_task.json", 'r') as load_f:
             all_waiting_task = json.load(load_f)
             load_f.close()
-        mailBeginning = "<html><body><p>Hi, ALL:</p> <p>以下任务已等待超过30min, 且对应的资源并不是全在使用, 请及时查看.</p><table border='1' align=center> <caption><font size='3'><b>等待超过60min的任务列表</b></font></caption><tr align=center><td bgcolor='#d0d0d0'>PR</td><td bgcolor='#d0d0d0'>CIName</td><td bgcolor='#d0d0d0'>已等待时间/min</td><td bgcolor='#d0d0d0'>使用资源</td><td bgcolor='#d0d0d0'>实际使用资源个数/个</td><td bgcolor='#d0d0d0'>资源全量/个</td><td bgcolor='#d0d0d0'>repo</td></tr>"
         mailContent = ''
         for task in all_waiting_task:
             if task['waiting'] > self.__longest_waiting_default:
@@ -81,11 +81,23 @@ class ExceptionWaitingJob():
                                 task['PR'], task['CIName'], task['waiting'],
                                 task['cardType'], real_use_count,
                                 resource_count, task['repoName'])
-        print("mailContent")
-        print(mailContent)
+        return mailContent
+
+    def exactExceptionAlarm(self):
+        count = 1
+        mailContent = self.getExceptionWaitingJob()
+        mailBeginning = "<html><body><p>Hi, ALL:</p> <p>以下任务已等待超过60min, 且对应的资源并不是全在使用, 请及时查看.</p><table border='1' align=center> <caption><font size='3'><b>等待超过60min的任务列表</b></font></caption><tr align=center><td bgcolor='#d0d0d0'>PR</td><td bgcolor='#d0d0d0'>CIName</td><td bgcolor='#d0d0d0'>已等待时间/min</td><td bgcolor='#d0d0d0'>使用资源</td><td bgcolor='#d0d0d0'>实际使用资源个数/个</td><td bgcolor='#d0d0d0'>资源全量/个</td><td bgcolor='#d0d0d0'>repo</td></tr>"
+        while count < 4 and mailContent != '':
+            print("count: %s" % count)
+            print("mailContent: %s" % mailContent)
+            time.sleep(60)
+            mailContent = self.getExceptionWaitingJob()
+            count += 1  #最多请求3次
         if mailContent != '':
             mailDetails = mailBeginning + mailContent + '</body></html>'
             self.sendMail(mailDetails)
+        else:
+            print("资源正常!")
 
     def getIsAbnormal(self, default_count, running_count):
         """
@@ -112,4 +124,4 @@ class ExceptionWaitingJob():
         mail.send()
 
 
-ExceptionWaitingJob().getExceptionWaitingJob()
+ExceptionWaitingJob().exactExceptionAlarm()
