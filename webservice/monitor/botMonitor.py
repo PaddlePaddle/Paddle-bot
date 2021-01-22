@@ -65,6 +65,13 @@ class PaddleBotMonitor(object):
             time.sleep(30)
             re_checkCIStatus = self.checkCIStatus()
             count += 1
+        if count != 1:
+            restart_log = '%s Paddle-bot restart %s' % (time.strftime(
+                "%Y%m%d %H:%M:%S", time.localtime()), count)
+            restartBot_record = 'restartBot.txt'
+            with open(restartBot_record, 'a+') as f:
+                f.write(restart_log + '\n')
+            f.close()
         if count == 6 and re_checkCIStatus == checkPRStatus:
             self.sendMail('Paddle-bot服务不稳定, 请即时查看')
             print("Paddle-bot服务不稳定!")
