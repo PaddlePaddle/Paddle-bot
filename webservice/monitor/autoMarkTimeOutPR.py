@@ -166,6 +166,12 @@ class MarkTimeoutCI(object):
                         logger.error('%s_%s_%s mark failed!' %
                                      (PR, commit, ci['ciName']))
             if len(mark_ci_list) > 0:
+                marked = self.queryIfHasMark(PR, commit)
+                if marked == False:
+                    self.inform(item)
+                else:
+                    print('%s_%s has marked!!!!' % (PR, commit))
+                    logger.info('%s_%s has marked!!!!' % (PR, commit))
                 data = {
                     'TIME': time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
                     'PR': PR,
@@ -173,12 +179,6 @@ class MarkTimeoutCI(object):
                     'CINAME': mark_ci_list
                 }
                 self.save_markci_job(data)
-                marked = self.queryIfHasMark(PR, commit)
-                if marked == False:
-                    self.inform(item)
-                else:
-                    print('%s_%s has marked!!!!' % (PR, commit))
-                    logger.info('%s_%s has marked!!!!' % (PR, commit))
 
     def queryIfHasMark(self, PR, commitid):
         """marked 是否已经标记过"""
