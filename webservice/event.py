@@ -155,56 +155,55 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
 @router.register("issues", action="opened")
 async def issues_assign_reviewer(event, gh, repo, *args, **kwargs):
     """assign reviewer for issuue"""
-    if repo in ['PaddlePaddle/Paddle']:
+    today = datetime.date.today()
+    issue_effect_repos = localConfig.cf.get('FunctionScope',
+                                            'ISSUE_open_assign_reviewer')
+    if repo in issue_effect_repos:
         assign_url = event.data["issue"]["url"] + "/assignees"
-        bos_url = 'https://paddle-docker-tar.cdn.bcebos.com/buildLog/todayDuty.log'  # 取当日值班同学
-        assignees = ['%s' % requests.get(bos_url).text]
-        payload = {"assignees": assignees}
+        f = open("buildLog/%s_todayDuty-%s.log" % (repo.split('/')[-1], today))
+        assignees = f.read().strip()
+        payload = {"assignees": ['%s' % assignees]}
+        logger.info("payload: %s" % payload)
         response = await gh.post(assign_url, data=payload)
+        logger.info("response['assignees']:  %s" % response['assignees'])
         assignees_length = len(response['assignees'])
         if assignees_length < 1:
             logger.error('%s not in PaddlePaddle!' % assignees)
+        f.close()
 
 
 @router.register("issues", action="opened")
 async def issue_event(event, gh, repo, *args, **kwargs):
     """Automatically respond to users"""
-    issue_num = event.data['issue']['number']
-    url = event.data["issue"]["comments_url"]
-    if repo not in [
-            'PaddlePaddle/Paddle',
-            'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode',
-            'PaddlePaddle/FluidDoc',
-    ]:
-        repo = 'Others'
-    if repo == 'PaddlePaddle/Paddle':
-        message = "%s\r\n\r\n%s" % (
-            localConfig.cf.get(repo, 'ISSUE_OPENED_CN'),
-            localConfig.cf.get(repo, 'ISSUE_OPENED_EN'))
-        logger.info("Issue%s automatic reply successfully." % (issue_num))
+    issue_effect_repos = localConfig.cf.get('FunctionScope',
+                                            'ISSUE_open_auto_reply')
+    if repo in issue_effect_repos:
+        issue_num = event.data['issue']['number']
+        url = event.data["issue"]["comments_url"]
+        message = "%s\r\n\r\n%s" % (localConfig.cf.get(
+            repo, 'ISSUE_OPENED_CN'), localConfig.cf.get(repo,
+                                                         'ISSUE_OPENED_EN'))
+        logger.info("%s Issue %s automatic reply successfully." %
+                    (repo, issue_num))
         await gh.post(url, data={"body": message})
 
 
 @router.register("issues", action="closed")
 async def check_close_regularly(event, gh, repo, *args, **kwargs):
     """check_close_regularly"""
-    url = event.data["issue"]["comments_url"]
-    sender = event.data["sender"]["login"]
-    if repo not in [
-            'PaddlePaddle/Paddle', 'PaddlePaddle/benchmark',
-            'lelelelelez/leetcode', 'PaddlePaddle/FluidDoc', 'iducn/HelloWorld'
-    ]:
-        repo = 'Others'
-    if sender == 'paddle-bot[bot]':
-        message = localConfig.cf.get(repo, 'CLOSE_REGULAR')
-        await gh.post(url, data={"body": message})
-    else:
-        message = "%s\r\n\r\n%s\r\n%s" % (
-            localConfig.cf.get(repo, 'ISSUE_CLOSE'),
-            localConfig.cf.get(repo, 'CHOOSE_YES'),
-            localConfig.cf.get(repo, 'CHOOSE_NO'))
-        await gh.post(url, data={"body": message})
+    issue_effect_repos = localConfig.cf.get('FunctionScope',
+                                            'ISSUE_close_auto_reply')
+    if repo in issue_effect_repos:
+        url = event.data["issue"]["comments_url"]
+        sender = event.data["sender"]["login"]
+        if sender == 'paddle-bot[bot]':
+            message = localConfig.cf.get(repo, 'CLOSE_REGULAR')
+            await gh.post(url, data={"body": message})
+        else:
+            message = "%s\r\n\r\n%s\r\n%s" % (localConfig.cf.get(
+                repo, 'ISSUE_CLOSE'), localConfig.cf.get(
+                    repo, 'CHOOSE_YES'), localConfig.cf.get(repo, 'CHOOSE_NO'))
+            await gh.post(url, data={"body": message})
 
 
 @router.register("status")
