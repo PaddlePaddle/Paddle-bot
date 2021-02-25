@@ -51,7 +51,7 @@ def get_stageUrl(target_url):
     return stage_url
 
 
-def getBasicCIIndex(repo, sha, target_url):
+def getBasicCIIndex(repo, sha, document_fix, target_url):
     """
     获取CI基础指标: 时间 + 状态 + 退出码
     1. 退出码的获取需要分析日志
@@ -123,9 +123,14 @@ def getBasicCIIndex(repo, sha, target_url):
                             [:-3])  #任务结束时间
                         if res['pipelineConfName'].startswith(
                                 Paddle_sa_detailed_ci_tuple):
-                            taskid = job['realJobBuild']['shellBuild'][
-                                'taskId']
-                            logUrl = "https://xly.bce.baidu.com/paddlepaddle/paddle-ci/sa_log/log/download/%s" % taskid
+                            if document_fix == 'True':
+                                EXCODE = 0 if job['status'] == 'SUCC' else 1
+                                basic_ci_index_dict['EXCODE'] = EXCODE
+                                logUrl = None
+                            else:
+                                taskid = job['realJobBuild']['shellBuild'][
+                                    'taskId']
+                                logUrl = "https://xly.bce.baidu.com/paddlepaddle/paddle-ci/sa_log/log/download/%s" % taskid
                         else:
                             EXCODE = 0 if job['status'] == 'SUCC' else 1
                             basic_ci_index_dict['EXCODE'] = EXCODE
@@ -137,9 +142,19 @@ def getBasicCIIndex(repo, sha, target_url):
                         paddle_build_endTime = int(
                             str(job['realJobBuild']['endTime'])
                             [:-3])  #paddle结束开始时间
-                        logParam = job['realJobBuild']['logUrl']
-                        logUrl = localConfig.cf.get('ipipeConf',
-                                                    'log_url') + logParam
+                        if document_fix == 'True' and not res[
+                                'pipelineConfName'].startswith(
+                                    'PR-CI-CPU-Py2'):
+                            EXCODE = 0 if job['status'] == 'SUCC' else 1
+                            basic_ci_index_dict['EXCODE'] = EXCODE
+                            logUrl = None
+                        else:
+                            logParam = job['realJobBuild']['logUrl']
+                            logUrl = localConfig.cf.get('ipipeConf',
+                                                        'log_url') + logParam
+                    if document_fix == 'True':
+                        logger.info("%s, document_fix: %s; EXCODE: %s" % (
+                            res['pipelineConfName'], document_fix, EXCODE))
                     basic_ci_index_dict[
                         'paddle_build_startTime'] = paddle_build_startTime
                     basic_ci_index_dict[

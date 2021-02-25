@@ -239,14 +239,15 @@ async def get_ci_index(event, gh, repo, *args, **kwargs):
             ifCancel = task.CancelJobByXly(target_url)
             if ifCancel == False:  #CI被取消的不写入数据库
                 if repo not in ['PaddlePaddle/Paddle']:  #没有test=documentfix的情况
-                    basic_ci_index_dict['documentfix'] = 'False'
+                    document_fix = 'False'
                     basic_ci_index_dict[
                         'EXCODE'] = 0 if state == 'success' else 1  #非Paddle的退出码只有0, 1
                 else:
                     commit_message = event.data['commit']['commit']['message']
                     document_fix = ifDocumentFix(commit_message)
-                    basic_ci_index_dict['documentfix'] = '%s' % document_fix
-                timeciindex = getBasicCIIndex(repo, commitId, target_url)
+                basic_ci_index_dict['documentfix'] = '%s' % document_fix
+                timeciindex = getBasicCIIndex(repo, commitId, document_fix,
+                                              target_url)
                 for key in timeciindex:
                     basic_ci_index_dict[key] = timeciindex[key]
                 ifInsert = False  #查询30s内是否已经插入数据了
