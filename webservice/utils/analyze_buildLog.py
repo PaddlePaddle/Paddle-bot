@@ -650,8 +650,46 @@ def get_index(index_dict, sha, pipelineConfName, target_url):
 
 def analyze_failed_cause(index_dict, target_url):
     EXCODE = index_dict['EXCODE']
-    if EXCODE == 8 and index_dict[
-            'ciName'] not in ['PR-CI-OP-benchmark-TEST']:  #单测失败原因
+    filename = '%s_%s_%s.log' % (index_dict['ciName'], index_dict['commitId'],
+                                 index_dict['createTime'])
+    analysis_ci_index = {}
+    analysis_ci_index['PR'] = index_dict['PR']
+    analysis_ci_index['commitId'] = index_dict['commitId']
+    analysis_ci_index['ciName'] = index_dict['ciName']
+    analysis_ci_index['endTime'] = index_dict['endTime']
+    analysis_ci_index['EXCODE'] = EXCODE
+    analysis_ci_index['triggerUser'] = index_dict['triggerUser']
+    analysis_ci_index['targetUrl'] = target_url
+    if EXCODE in [0, 4]:  #2代码冲突，6需要approve, 4代码风格不符合
+        isException = 0
+    elif EXCODE == 2:
+        isException = 0
+        analysis_ci_index['description'] = 'code conflict'
+    elif EXCODE == 6:
+        isException = 0
+        analysis_ci_index['description'] = 'pr need to approve'
+    elif EXCODE == 503:
+        isException = 1
+        analysis_ci_index['description'] = 'HTTP PROXY NOT Good'
+    elif EXCODE == 7:
+        query_stat = "SELECT EXCODE,PR,commitId FROM paddle_ci_index WHERE ciName='%s' order by time desc limit 5" % index_dict[
+            'ciName']
+        db = Database()
+        result = list(db.query(query_stat))
+        if len(result) == 0:
+            isException = 0
+        else:
+            last5tasks_buildfailed = [
+                record['EXCODE'] for record in result[0]
+                if record['EXCODE'] == 7
+            ]
+            if len(last5tasks_buildfailed) < 3:
+                isException = 0
+            else:
+                isException = 1
+    elif EXCODE == 8 and index_dict['ciName'] not in ['PR-CI-OP-benchmark'
+                                                      ]:  #单测失败原因
+        isException = 0  # 先默认是PR本身的单测问题
         testsfailed_list = []
         WLIST_PR = wlist_alarm.wlist_pr
         WLIST_UT = wlist_alarm.wlist_ut
@@ -687,6 +725,8 @@ def analyze_failed_cause(index_dict, target_url):
             f.close()
         os.remove("buildLog/testsfailed_%s" % filename)
         if len(testsfailed_list) > 20:
+            isException = 0
+            analysis_ci_index['description'] = "PR's uts failed 20+"
             logger.error("PR's uts failed 20+: %s %s: %s" %
                          (index_dict['PR'], index_dict['ciName'], target_url))
         else:
@@ -775,10 +815,35 @@ def analyze_failed_cause(index_dict, target_url):
                         alarm_ut_dict_ult[ut] = alarm_ut_dict[ut]
             logger.info('alarm_ut_dict_ult : %s' % alarm_ut_dict_ult)
             if len(alarm_ut_dict_ult) > 0:
-                sendAlarmMail(alarm_ut_dict_ult)
+                send_utfailed_mail(alarm_ut_dict_ult)
+                isException = 1  #必挂
+                analysis_ci_index['description'] = "ut failed certainly"
+
+    elif EXCODE == 9:
+        f = open('buildLog/%s' % filename, 'r')
+        data = f.read()
+        covfailed_strlist = data.split('expected >= 90.0 %, actual', 1)
+        covRate = float(covfailed_strlist[1].split('%, failed')[0].strip())
+        analysis_ci_index['covRate'] = covRate
+        analysis_ci_index[
+            'description'] = 'Coverage Rate NOT Reach The Standard'
+        isException = 0
+
+    elif EXCODE == 1:
+        isException = 0  #EXCODE==1时暂定为非异常
+    analysis_ci_index['isException'] = isException
+    logger.info("EXCODE: %s, isException: %s" % (EXCODE, isException))
+    logger.info("analysis_ci_index: %s" % analysis_ci_index)
+    db = Database()
+    result = db.insert('paddle_ci_analysis', analysis_ci_index)
+    if result == True:
+        logger.info('%s insert paddle_ci_analysis success!' %
+                    analysis_ci_index)
+    else:
+        logger.info('%s insert paddle_ci_analysis failed!' % analysis_ci_index)
 
 
-def sendAlarmMail(alarm_ut_dict):
+def send_utfailed_mail(alarm_ut_dict):
     with open("buildLog/lastestfaileduts.json", 'r') as load_f:
         try:
             lastestfaileduts = json.load(load_f)
@@ -810,13 +875,20 @@ def sendAlarmMail(alarm_ut_dict):
                     else:
                         TABLE_CONTENT += '<tr align="center"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
                             ut, pr, commit, ciname, ciurl)
-        HTML_CONTENT = HTML_CONTENT + TABLE_CONTENT + "</tbody> </table> </body></html>"
-        mail = Mail()
-        mail.set_sender('paddlepaddle_bot@163.com')
-        mail.set_receivers(['xxx@baidu.com'])
-        mail.set_title('[告警] CI单测挂了三次以上！')
-        mail.set_message(HTML_CONTENT, messageType='html', encoding='gb2312')
-        mail.send()
+        HTML_CONTENT = HTML_CONTENT + TABLE_CONTENT + "</tbody> </table> </body></html> "
+        receiver = ['ddd@baidu.com']
+        title = '[告警] CI单测挂了三次以上！'
+        sendMail(receiver, title, HTML_CONTENT)
+
+
+def sendMail(receiver, title, content):
+    """发送邮件"""
+    mail = Mail()
+    mail.set_sender('paddlepaddle_bot@163.com')
+    mail.set_receivers(receiver)
+    mail.set_title(title)
+    mail.set_message(content, messageType='html', encoding='gb2312')
+    mail.send()
 
 
 def create_failed_cause_csv(failed_cause_file):
