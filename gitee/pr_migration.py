@@ -4,8 +4,8 @@ import json
 import logging
 import time
 import datetime
-from handler import GiteePROperation
-from pr_merge import gitee_merge_pr
+from gitee.handler import GiteePROperation
+from gitee.pr_merge import gitee_merge_pr, sendMail
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,7 +19,9 @@ class GithubRepo(object):
     def __init__(self):
         self.commitUrl = 'https://api.github.com/repos/{owner}/{repo}/commits'
         self.prUrl = 'https://api.github.com/repos/{owner}/{repo}/pulls'
-        self.headers = {'authorization': "token xxx"}
+        self.headers = {
+            'authorization': "token 627065d633f9ea64e659aaf4a68bad840327c145"
+        }
 
     def utcTimeToStrTime(self, utcTime):
         """utc时间转换为当地时间"""
@@ -59,7 +61,6 @@ class GithubRepo(object):
         branch = response['head']['ref']
         title = response['title']
         body = response['body']
-
         return branch, title, body
 
     def getPRchangeFiles(self, commitId):
@@ -103,7 +104,7 @@ class giteeRepo():
         """
         prUrl = self.prUrl.format(owner='paddlepaddle', repo='Paddle')
         payload = {
-            "access_token": "04388373ac19b581f4d2e8238131b20a",
+            "access_token": "xxxxx",
             "title": "%s" % title,
             "head": "PaddlePaddle-Gardener:%s" % branch,
             "base": "develop",
@@ -114,6 +115,17 @@ class giteeRepo():
             prUrl,
             params=payload,
             headers={'Content-Type': 'application/json'})
+        count = 0
+        while response.status_code not in [200, 201]:
+            time.sleep(10)
+            response = requests.request(
+                "POST",
+                prUrl,
+                params=payload,
+                headers={'Content-Type': 'application/json'})
+            count += 1
+            if count >= 3:
+                break
         if response.status_code in [200, 201]:
             PR = response.json()['number']
             sha = response.json()['head']['sha']
@@ -121,6 +133,10 @@ class giteeRepo():
                         (PR, sha))
             return PR, sha
         else:
+            title = '[告警]Gitee提交PR失败'
+            receivers = ['xxx@baidu.com']
+            mail_content = response.text
+            sendMail(title, mail_content, receivers)
             logger.error('Gitee PaddlePaddle/Paddle %s %s create failed!' %
                          (PR, sha))
             return None, None
@@ -135,8 +151,7 @@ class githubPrMigrateGitee():
         """
         gitee的commitid与GitHub的不一致
         """
-        with open('/home/zhangchunle/Paddle-bot/gitee/commitmap.json',
-                  'r') as f:
+        with open('Paddle-bot/gitee/commitmap.json', 'r') as f:
             data = json.load(f)
             f.close()
         return data
@@ -146,8 +161,7 @@ class githubPrMigrateGitee():
         当天提交的PR是否可能有PR冲突
         """
         ifconflict = False
-        with open('/home/zhangchunle/Paddle-bot/gitee/commitmap.json',
-                  'r') as f:
+        with open('Paddle-bot/gitee/commitmap.json', 'r') as f:
             data = json.load(f)
             f.close()
         for key in data:
@@ -160,8 +174,8 @@ class githubPrMigrateGitee():
         return ifconflict
 
     def main(self):
-        os.system('bash update_code.sh giteePaddle')
-        os.system('bash update_code.sh githubPaddle')
+        os.system('bash Paddle-bot/gitee/update_code.sh giteePaddle')
+        os.system('bash Paddle-bot/gitee/update_code.sh githubPaddle')
         now = datetime.datetime.now()
         beforeTime = now - datetime.timedelta(
             hours=now.hour,
@@ -174,30 +188,33 @@ class githubPrMigrateGitee():
         CommitList_github = self.githubPaddle.getCommitList(commitId_github,
                                                             beforeTime)
         commit_map = {}
+        with open('Paddle-bot/gitee/commitmap.json', 'w') as f:  #清空commit map
+            json.dump(commit_map, f)
+            f.close()
         for commitId in CommitList_github[::-1]:
+            print(commitId)
             commit_map_value = {}
             changeFiles, PR = self.githubPaddle.getPRchangeFiles(commitId)
             ifconflict = self.ifPRconflict(changeFiles)
             if ifconflict == True:
                 gitee_merge_pr()
                 time.sleep(10)
-                os.system('bash update_code.sh giteePaddle')  # merge后要更新环境
+                os.system('bash Paddle-bot/gitee/update_code.sh giteePaddle'
+                          )  # merge后要更新环境
                 commit_map = {}
             commit_map_value['changeFiles'] = changeFiles
             commit_map_value['githubCommitId'] = commitId
             branch, title, body = self.githubPaddle.getPRtitleAndBody(PR)
-            os.system('bash update_code.sh migrateEnv %s %s' %
+            os.system('bash Paddle-bot/gitee/update_code.sh migrateEnv %s %s' %
                       (commitId, branch))
             self.giteePaddle.prepareGiteeFiles(commitId, branch, title,
                                                changeFiles)
-            os.system('bash update_code.sh prepareCode %s %s %s' %
-                      (commitId, branch, title))
+            os.system(
+                'bash Paddle-bot/gitee/update_code.sh prepareCode %s %s mirgate_%s'
+                % (commitId, branch, PR))
             PR, sha = self.giteePaddle.create_pr(branch, title, body)
             commit_map_value['sha'] = sha
             commit_map[PR] = commit_map_value
-            with open('commitmap.json', 'w') as f:
+            with open('Paddle-bot/gitee/commitmap.json', 'w') as f:
                 json.dump(commit_map, f)
                 f.close()
-
-
-githubPrMigrateGitee().main()

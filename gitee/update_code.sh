@@ -6,6 +6,7 @@ ROOT_PATH=$PWD
 
 function GithubPaddle_env() {
     rm -rf ${ROOT_PATH}/Paddle
+    cd ${ROOT_PATH}
     git clone https://github.com/PaddlePaddle-Gardener/Paddle.git
     ROOT_PATH=$PWD
     echo $ROOT_PATH
@@ -18,6 +19,7 @@ function GithubPaddle_env() {
 
 function GiteePaddle_env() {
     rm -rf ${ROOT_PATH}/gitee_Paddle
+    cd ${ROOT_PATH}
     http_proxy='' https_proxy='' git clone https://gitee.com/paddlepaddle-gardener/Paddle.git gitee_Paddle
     TARGET_PATH=${ROOT_PATH}/gitee_Paddle
     BRANCH='develop'
@@ -66,7 +68,7 @@ function createPR() {
     git commit -m $commitMessage
     git push origin $newBranch
     git checkout develop
-    git rm $newBranch
+    git branch -D $newBranch
 }
 
 
