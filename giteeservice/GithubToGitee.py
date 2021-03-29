@@ -23,7 +23,7 @@ import os
 
 
 sys.path.append("..")
-from webservice.utils.mail_163 import Mail
+from webservice.utils import Mail
 
 
 class GithubIssueToGitee(object):
@@ -253,9 +253,9 @@ class GithubIssueToGitee(object):
                 return True
 
     
-    def sendMail(self, content, title="isuee迁移异常", receivers="iducn3@163.com"):
+    def sendMail(self, content, title, receivers):
         mail = Mail()
-        mail.set_sender('paddlepaddle_bot@163.com')
+        mail.set_sender('xxxx')
         mail.set_receivers(receivers)
         mail.set_title(title)
         mail.set_message(content, messageType='html', encoding='gb2312')
