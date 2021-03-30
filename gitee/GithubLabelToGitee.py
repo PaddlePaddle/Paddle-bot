@@ -4,7 +4,6 @@
  将github中的label同步至gitee中
 """
 
-
 import urllib.parse
 import traceback
 import requests
@@ -20,12 +19,10 @@ class GithubLabelToGitee(object):
         self.github = github_headers
         self.Token = token
         logging.basicConfig(
-                            level=logging.INFO,
-                            filename='./logs/GithubToGitee.log',
-                            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-                            )
+            level=logging.INFO,
+            filename='./logs/GithubToGitee.log',
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         self.logger = logging.getLogger(__name__)
-
 
     def _PageUrl(self, url, headers):
         """
@@ -50,9 +47,9 @@ class GithubLabelToGitee(object):
                 self.logger.info("Total pages: %s" % (total_pages))
                 return total_pages
         except BaseException:
-            self.logger.error("Failed to request the total number of pages %s" % (url))
+            self.logger.error(
+                "Failed to request the total number of pages %s" % (url))
         return False
-
 
     def GetGithubLabel(self):
         """
@@ -64,13 +61,14 @@ class GithubLabelToGitee(object):
         if page_num:
             for page in range(page_num):
                 page += 1
-                label_response = requests.get(label_url + "&page=" + page, headers=self.github).json()
+                label_response = requests.get(label_url + "&page=" + page,
+                                              headers=self.github).json()
         else:
-            label_response = requests.get(label_url, headers=self.github).json()
+            label_response = requests.get(label_url,
+                                          headers=self.github).json()
         for label in label_response:
             label_list.append([label['name'], label['color']])
         return label_list
-
 
     def CreateGiteeLabel(self):
         """
@@ -87,4 +85,3 @@ class GithubLabelToGitee(object):
                 self.logger.error("Label %s creation failed, status code %s, failure reason: %s" \
                                 % (label[0], create_response.status_code, create_response.text))
         self.logger.info("All labels are created")
-
