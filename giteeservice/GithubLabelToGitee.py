@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-将github中的label同步至gitee中
+ 将github中的label同步至gitee中
 """
 
 
