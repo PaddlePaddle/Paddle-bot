@@ -249,13 +249,13 @@ class GithubIssueToGitee(object):
                     try:
                         response = requests.patch(closed_issue_url)
                         self.logger.info("Issue %s is closed" % num)
-                        merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>" "</td><td>%s</td><td>closed succeed</td></tr>" % (
+                        self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>" "</td><td>%s</td><td>closed succeed</td></tr>" % (
                             num)
                     except:
                         self.logger.error("Failed to cancel issue %s" %
                                           issue_num)
                         print(traceback.format_exc())
-                        merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>" "</td><td>{}</td><td>closed failed</td><td>{}</td></tr>" % (
+                        self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>" "</td><td>{}</td><td>closed failed</td><td>{}</td></tr>" % (
                             num, response.status_code)
 
     def _CompareLenth(self, msg):
