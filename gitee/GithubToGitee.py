@@ -27,13 +27,13 @@ from webservice.utils.mail_163 import Mail
 class GithubIssueToGitee(object):
     """
     将github中的issue同步至gitee中
-    StatusCode: 分别记录创建issue（title）和新建评论所返回的状态码，用于开发期间统计各个问题的出现概率
     """
 
     def __init__(self, repo=None, headers=None, create_token=None):
         self.yesterday, self.close_day = self.GetDate()
         self.gitee_yesterday = './datas/gitee_list%s.txt' % self.yesterday
         self.gitee_close = './datas/gitee_list%s.txt' % self.close_day
+        self.issue_info = ""
         logging.basicConfig(
             level=logging.INFO,
             filename='./logs/IssueToGitee_%s.log' % self.yesterday,
@@ -46,7 +46,6 @@ class GithubIssueToGitee(object):
         self.logger = logging.getLogger(__name__)
         self.issue_list = self.GetGihubIssue()
         self.issues_dict = iter(self.GetIssueinfo())
-        self.request_result = {'issue': {}, 'comment': {}}
 
     def utcTimeToStrTime(self, utcTime):
         """
@@ -168,10 +167,7 @@ class GithubIssueToGitee(object):
                 info_dict['author'] = title_response['user']['login']
                 info_dict['comments'] = []
                 info_dict['labels'] = []
-                if title_response['labels']:
-                    for label in title_response['labels']:
-                        info_dict['labels'].append(label['name'])
-                self.logger.info("Get %s issue's information successfully!!!" %
+                self.logger.info("Get %s issue's information successfully!" %
                                  (num))
                 comments_url = title_url + "/comments"
                 comments_response = requests.get(comments_url,
@@ -182,9 +178,7 @@ class GithubIssueToGitee(object):
                         urllib.parse.quote(comment['html_url']),
                         urllib.parse.quote(comment['body'])
                     ])
-                    self.logger.info(
-                        "Get comment's information successfully！---> %s" %
-                        (info_dict))
+                    self.logger.info("Get comment's information successfully")
                 yield info_dict
         else:
             return False
@@ -194,10 +188,6 @@ class GithubIssueToGitee(object):
         将issue评论同步至gitee中
         """
         for comment_info in comments_list:
-            if 'counts' in self.request_result['comment']:
-                self.request_result['comment']['counts'] += 1
-            else:
-                self.request_result['comment']['counts'] = 1
             create_comment_url = "https://gitee.com/api/v5/repos/%s/issues/%s/comments?access_token=%s&body=[<b> 源自github用户%s</b>](%s): \r\n%s" \
                                  % (self.repo_path, issue_num, self.create_token,
                                     comment_info[0], comment_info[1], comment_info[2])
@@ -207,14 +197,7 @@ class GithubIssueToGitee(object):
                 self.logger.error("Status code %s, %s" %
                                   (CommentStatus, comment_response.text))
                 break
-            self.logger.info("Send a new comment request %s" %
-                             (create_comment_url))
-            if CommentStatus in self.request_result['comment']:
-                self.request_result['comment'][CommentStatus] += 1
-            else:
-                self.request_result['comment'][CommentStatus] = 1
-            self.logger.info("Create comment %s" %
-                             (self.request_result['comment']))
+            self.logger.info("Send a new comment request.")
         self.logger.info("The comment for creating issue %s is complete" %
                          (issue_num))
 
@@ -265,15 +248,12 @@ class GithubIssueToGitee(object):
         """
         if type(msg) == 'list':
             for i in msg:
-                if len(i) >= 15534:
+                if len(i) >= 15530:
                     return False
-                else:
-                    return True
         elif type(msg) == 'str':
-            if len(msg) >= 15534:
+            if len(msg) >= 15530:
                 return False
-            else:
-                return True
+        return True
 
     def CreateIssueToGitee(self):
         """
@@ -282,6 +262,7 @@ class GithubIssueToGitee(object):
         """创建issue"""
         github_list = []
         gitee_list = []
+        result_issues = []
         if self.issues_dict:
             for issue in self.issues_dict:
                 if not self._CompareLenth(issue[
@@ -289,11 +270,9 @@ class GithubIssueToGitee(object):
                     self.logger.error(
                         "Issue %s's description or commentexceeds the word limit"
                         % issue['num'])
+                    self.issue_info = self.issue_info + "<tr align=center><td>issue</td><td>%s</td><td>""</td><td>failed</td><td>%s</td></tr>" \
+                                      % (issue['num'], 414)
                     continue
-                if 'counts' in self.request_result['issue']:
-                    self.request_result['issue']['counts'] += 1
-                else:
-                    self.request_result['issue']['counts'] = 1
                 Count = 0
                 while Count < 3:
                     create_issue_url = "https://gitee.com/api/v5/repos/%s/issues?access_token=%s&repo=%s&title=%s&body=[<b>源自github用户%s</b>](%s): \r\n%s" \
@@ -303,28 +282,22 @@ class GithubIssueToGitee(object):
                         create_response = requests.post(create_issue_url)
                         IssueStatus = create_response.status_code
                         response_json = create_response.json()
-                        if IssueStatus in self.request_result['issue']:
-                            self.request_result['issue'][IssueStatus] += 1
-                        else:
-                            self.request_result['issue'][IssueStatus] = 1
-                        self.logger.info("Create issue %s" %
-                                         (self.request_result['issue']))
                         """新建issue的number"""
                         issue_num = response_json['number']
                         github_list.append(issue['num'])
                         gitee_list.append(issue_num)
                         self.logger.info(
-                            "Send a new issue request:%s, Issue number:%s" %
-                            (create_issue_url, issue_num))
+                            "Send a new issue request, Issue number:%s" %
+                            (issue_num))
                         """添加评论"""
                         self._CreateCommentToGitee(issue_num,
                                                    issue['comments'])
                         self.logger.info("Issue %s creation completed" %
                                          (issue['num']))
-                        self.issue_info = self.issue_info + "<tr align=center><td>issue</td><td>%s</td><td>succeed</td><td>%s</td></tr>" \
+                        result_issues.append(issue['num'])
+                        self.issue_info = self.issue_info + "<tr align=center><td>issue</td><td>%s</td><td>%s</td><td>succeed</td></tr>" \
                                           % (issue['num'], issue_num)
                         Count = 3
-
                     except Exception:
                         """
                         当状态为200或201，异常的原因是转换json失败
@@ -339,8 +312,8 @@ class GithubIssueToGitee(object):
                                 "Issue %s creation failed, status code %s, %s"
                                 % (issue['num'], IssueStatus,
                                    create_response.text))
-                            self.issue_info = self.issue_info + "<tr align=center><td>issue</td><td>%s</td><td>succeed</td><td>%s</td><td>%s</td></tr>" \
-                                              % (issue['num'], issue_num, IssueStatus)
+                            self.issue_info = self.issue_info + "<tr align=center><td>issue</td><td>%s</td><td>""</td><td>failed</td><td>%s</td></tr>" \
+                                              % (issue['num'], IssueStatus)
                             Count = 3
                         else:
                             Count += 1
@@ -352,17 +325,16 @@ class GithubIssueToGitee(object):
                                 self.logger.error(
                                     "Issue %s retry %s times, all failed, status code %s"
                                     % (issue['num'], Count, IssueStatus))
-                                self.issue_info = self.issue_info + "<tr align=center><td>Issue</td><td>%s</td><td>succeed</td><td>%s</td><td>%s</td></tr>" \
-                                                  % (issue['num'], issue_num, IssueStatus)
+                                self.issue_info = self.issue_info + "<tr align=center><td>Issue</td><td>%s</td><td>""</td><td>failed</td><td>%s</td></tr>" \
+                                                  % (issue['num'], IssueStatus)
                             time.sleep(1)
-                    time.sleep(1)
             """按日期记录当日创建的issue，方便之后更新状态为closed的操作"""
             if gitee_list:
                 f = open(self.gitee_yesterday, 'w', encoding='utf-8')
                 f.write(str(gitee_list).replace('[', '').replace(']', ''))
                 f.close()
             self.logger.info("The following issues have been migrated %s" %
-                             (self.issue_list))
+                             (result_issues))
         return self.issue_info
 
 
@@ -383,7 +355,10 @@ class Main(object):
             close_info = app.ClosedIssue(close_token)
         """发邮件"""
         if create_info != "" or close_info != "":
-            mail_content = ""
+            if close_info == "":
+                mail_content = ""
+            else:
+                mail_content = ""
             title = ''
             receivers = ['']
             self.sendMail(title, mail_content, receivers)
@@ -395,3 +370,7 @@ class Main(object):
         mail.set_title(title)
         mail.set_message(content, messageType='html', encoding='gb2312')
         mail.send()
+
+
+if __name__ == '__main__':
+    Main()
