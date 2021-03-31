@@ -21,7 +21,7 @@ import re
 import os
 
 sys.path.append("..")
-from webservice.utils.mail import Mail
+from webservice.utils.mail_163 import Mail
 
 
 class GithubIssueToGitee(object):
@@ -93,6 +93,7 @@ class GithubIssueToGitee(object):
             total_pages = int(page_num.group(1))
             self.logger.info("Total pages: %s" % (total_pages))
         except BaseException:
+            print(traceback.print_exc())
             self.logger.error(
                 "Failed to request the total number of pages %s" % (url))
         return url, total_pages
@@ -235,7 +236,7 @@ class GithubIssueToGitee(object):
         self.logger.info("Issue %s has been labelled" % issue_num)
         return response.status_code
 
-    def ClosedIssue(self, issue_num, token):
+    def ClosedIssue(self, token):
         """
         将issue状态改为closed
         """
@@ -249,14 +250,14 @@ class GithubIssueToGitee(object):
                     try:
                         response = requests.patch(closed_issue_url)
                         self.logger.info("Issue %s is closed" % num)
-                        self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>" "</td><td>%s</td><td>closed succeed</td></tr>" % (
+                        self.issue_info = self.issue_info + "<tr align=center><td>issue</td><td>" "</td><td>%s</td><td>closed succeed</td></tr>" % (
                             num)
                     except:
-                        self.logger.error("Failed to cancel issue %s" %
-                                          issue_num)
+                        self.logger.error("Failed to cancel issue %s" % num)
                         print(traceback.format_exc())
-                        self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>" "</td><td>{}</td><td>closed failed</td><td>{}</td></tr>" % (
+                        self.issue_info = self.issue_info + "<tr align=center><td>issue</td><td>" "</td><td>{}</td><td>closed failed</td><td>{}</td></tr>" % (
                             num, response.status_code)
+        return self.issue_info
 
     def _CompareLenth(self, msg):
         """
@@ -273,21 +274,6 @@ class GithubIssueToGitee(object):
                 return False
             else:
                 return True
-
-    def sendMail(self, title, content, receivers):
-        mail = Mail()
-        mail.set_sender('')
-        mail.set_receivers(receivers)
-        mail.set_title(title)
-        mail.set_message(content, messageType='html', encoding='gb2312')
-        mail.send()
-
-        if self.merge_pr_info != '':
-            mail_content = "<html><body><p>Hi, ALL:</p> <p>以下为昨日issue迁移及关闭统计表，请PM留意。</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
-            mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>GithubIssue</td><td bgcolor='#d0d0d0'>GiteeIssue</td><td bgcolor='#d0d0d0'>状态</td><td bgcolor='#d0d0d0'>错误码</td></tr>" + self.merge_pr_info + "</table>" + "<p>如有疑问，请@v_杜淳。谢谢</p>" + "</body></html>"
-            title = 'Gitee Issue自动迁移'
-            receivers = ['v_duchun@baidu.com']
-            self.sendMail(title, mail_content, receivers)
 
     def CreateIssueToGitee(self):
         """
@@ -335,8 +321,8 @@ class GithubIssueToGitee(object):
                                                    issue['comments'])
                         self.logger.info("Issue %s creation completed" %
                                          (issue['num']))
-                        self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>%s</td><td>succeed</td><td>%s</td></tr>" \
-                                             % (issue['num'], issue_num)
+                        self.issue_info = self.issue_info + "<tr align=center><td>issue</td><td>%s</td><td>succeed</td><td>%s</td></tr>" \
+                                          % (issue['num'], issue_num)
                         Count = 3
 
                     except Exception:
@@ -346,15 +332,15 @@ class GithubIssueToGitee(object):
                         414: 字符超限制
                         """
                         if IssueStatus == 200 or IssueStatus == 201:
-                            traceback.print_exc()
+                            print(traceback.print_exc())
                             Count = 3
                         elif IssueStatus == 414 or IssueStatus == 400:
                             self.logger.error(
                                 "Issue %s creation failed, status code %s, %s"
                                 % (issue['num'], IssueStatus,
                                    create_response.text))
-                            self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>%s</td><td>succeed</td><td>%s</td><td>%s</td></tr>" \
-                                                 % (issue['num'], issue_num, IssueStatus)
+                            self.issue_info = self.issue_info + "<tr align=center><td>issue</td><td>%s</td><td>succeed</td><td>%s</td><td>%s</td></tr>" \
+                                              % (issue['num'], issue_num, IssueStatus)
                             Count = 3
                         else:
                             Count += 1
@@ -366,8 +352,8 @@ class GithubIssueToGitee(object):
                                 self.logger.error(
                                     "Issue %s retry %s times, all failed, status code %s"
                                     % (issue['num'], Count, IssueStatus))
-                                self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>Issue</td><td>%s</td><td>succeed</td><td>%s</td><td>%s</td></tr>" \
-                                                     % (issue['num'], issue_num, IssueStatus)
+                                self.issue_info = self.issue_info + "<tr align=center><td>Issue</td><td>%s</td><td>succeed</td><td>%s</td><td>%s</td></tr>" \
+                                                  % (issue['num'], issue_num, IssueStatus)
                             time.sleep(1)
                     time.sleep(1)
             """按日期记录当日创建的issue，方便之后更新状态为closed的操作"""
@@ -377,8 +363,11 @@ class GithubIssueToGitee(object):
                 f.close()
             self.logger.info("The following issues have been migrated %s" %
                              (self.issue_list))
+        return self.issue_info
 
-    def main(self):
+
+class Main(object):
+    def __init__(self):
         github_header = {
             'User-Agent': 'Mozilla/5.0',
             'Authorization': '',
@@ -389,13 +378,20 @@ class GithubIssueToGitee(object):
         close_token = ""
         repo_list = ['']
         for repo in repo_list:
-            app = self.GithubIssueToGitee(repo, github_header, create_token)
-            app.CreateIssueToGitee()
-            app.ClosedIssue(close_token)
+            app = GithubIssueToGitee(repo, github_header, create_token)
+            create_info = app.CreateIssueToGitee()
+            close_info = app.ClosedIssue(close_token)
         """发邮件"""
-        if self.merge_pr_info != '':
-            mail_content = "<html><body><p>Hi, ALL:</p> <p>以下为昨日issue迁移及关闭统计表，请PM留意。</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
-            mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>GithubIssue</td><td bgcolor='#d0d0d0'>GiteeIssue</td><td bgcolor='#d0d0d0'>状态</td><td bgcolor='#d0d0d0'>错误码</td></tr>" + self.merge_pr_info + "</table>" + "<p>如有疑问，请@v_杜淳。谢谢</p>" + "</body></html>"
-            title = 'Gitee Issue自动迁移'
-            receivers = ['v_duchun@baidu.com']
+        if create_info != "" or close_info != "":
+            mail_content = ""
+            title = ''
+            receivers = ['']
             self.sendMail(title, mail_content, receivers)
+
+    def sendMail(self, title, content, receivers):
+        mail = Mail()
+        mail.set_sender('')
+        mail.set_receivers(receivers)
+        mail.set_title(title)
+        mail.set_message(content, messageType='html', encoding='gb2312')
+        mail.send()
