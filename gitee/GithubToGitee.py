@@ -21,7 +21,7 @@ import re
 import os
 
 sys.path.append("..")
-from webservice.utils.mail_163 import Mail
+from webservice.utils.mail import Mail
 
 
 class GithubIssueToGitee(object):
@@ -32,6 +32,8 @@ class GithubIssueToGitee(object):
 
     def __init__(self, repo=None, headers=None, create_token=None):
         self.yesterday, self.close_day = self.GetDate()
+        self.gitee_yesterday = './datas/gitee_list%s.txt' % self.yesterday
+        self.gitee_close = './datas/gitee_list%s.txt' % self.close_day
         logging.basicConfig(
             level=logging.INFO,
             filename='./logs/IssueToGitee_%s.log' % self.yesterday,
@@ -101,13 +103,13 @@ class GithubIssueToGitee(object):
         data_path: 记录issue的文件
         记录已经迁移的issue
         """
-        data_path = './datas/github_list%s.txt' % self.yesterday
-        if os.path.exists(data_path):
-            if not os.path.getsize(data_path):
+        github_yesterday = './datas/github_list%s.txt' % self.yesterday
+        if os.path.exists(github_yesterday):
+            if not os.path.getsize(github_yesterday):
                 self.logger.info("%s has no new issues" % self.yesterday)
                 return False
             else:
-                with open(data_path, 'r', encoding='utf-8') as f:
+                with open(github_yesterday, 'r', encoding='utf-8') as f:
                     issue_list = f.read().split(',')
                     self.logger.info("Read the issue list file successfully")
                     return issue_list
@@ -131,10 +133,10 @@ class GithubIssueToGitee(object):
                     self.logger.error("Failed to request issues %s" %
                                       (result_url))
             issue_list = sorted(issue_list)
-            f = open(data_path, 'w', encoding='utf-8')
+            f = open(github_yesterday, 'w', encoding='utf-8')
             f.write(str(issue_list).replace('[', '').replace(']', ''))
             f.close()
-            self.logger.info("Issue list file %s" % data_path)
+            self.logger.info("Issue list file %s" % github_yesterday)
             return issue_list
 
     def GetIssueinfo(self):
@@ -233,20 +235,28 @@ class GithubIssueToGitee(object):
         self.logger.info("Issue %s has been labelled" % issue_num)
         return response.status_code
 
-    def _ClosedIssue(self, issue_num, token):
+    def ClosedIssue(self, issue_num, token):
         """
         将issue状态改为closed
         """
-        closed_issue_url = "https://gitee.com/api/v5/repos/%s/issues/%s?access_token=%s&repo=%s&state=closed" \
-                           % (self.owner, issue_num, token, self.repo)
-        try:
-            response = requests.patch(closed_issue_url)
-            self.logger.info("Issue %s is closed" % issue_num)
-            return True
-        except:
-            self.logger.error("Failed to cancel issue %s" % issue_num)
-            print(traceback.format_exc())
-            return response.status_code
+        if os.path.exists(self.gitee_close):
+            with open(self.gitee_close, 'r', encoding='utf-8') as f:
+                close_list = f.read().split(',')
+                self.logger.info("Read the issue list file successfully")
+                for num in close_list:
+                    closed_issue_url = "https://gitee.com/api/v5/repos/%s/issues/%s?access_token=%s&repo=%s&state=closed" % (
+                        self.owner, num, token, self.repo)
+                    try:
+                        response = requests.patch(closed_issue_url)
+                        self.logger.info("Issue %s is closed" % num)
+                        merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>" "</td><td>%s</td><td>closed succeed</td></tr>" % (
+                            num)
+                    except:
+                        self.logger.error("Failed to cancel issue %s" %
+                                          issue_num)
+                        print(traceback.format_exc())
+                        merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>" "</td><td>{}</td><td>closed failed</td><td>{}</td></tr>" % (
+                            num, response.status_code)
 
     def _CompareLenth(self, msg):
         """
@@ -266,22 +276,26 @@ class GithubIssueToGitee(object):
 
     def sendMail(self, title, content, receivers):
         mail = Mail()
-        mail.set_sender('paddlepaddle_bot@163.com')
+        mail.set_sender('')
         mail.set_receivers(receivers)
         mail.set_title(title)
         mail.set_message(content, messageType='html', encoding='gb2312')
         mail.send()
 
-    def CreateIssueToGitee(self, close_token):
+        if self.merge_pr_info != '':
+            mail_content = "<html><body><p>Hi, ALL:</p> <p>以下为昨日issue迁移及关闭统计表，请PM留意。</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
+            mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>GithubIssue</td><td bgcolor='#d0d0d0'>GiteeIssue</td><td bgcolor='#d0d0d0'>状态</td><td bgcolor='#d0d0d0'>错误码</td></tr>" + self.merge_pr_info + "</table>" + "<p>如有疑问，请@v_杜淳。谢谢</p>" + "</body></html>"
+            title = 'Gitee Issue自动迁移'
+            receivers = ['v_duchun@baidu.com']
+            self.sendMail(title, mail_content, receivers)
+
+    def CreateIssueToGitee(self):
         """
         将issue同步至gitee中
         """
         """创建issue"""
-        yesterday_path = './datas/gitee_list%s.txt' % self.yesterday
-        close_path = './datas/gitee_list%s.txt' % self.close_day
         github_list = []
         gitee_list = []
-        merge_pr_info = ""
         if self.issues_dict:
             for issue in self.issues_dict:
                 if not self._CompareLenth(issue[
@@ -321,67 +335,67 @@ class GithubIssueToGitee(object):
                                                    issue['comments'])
                         self.logger.info("Issue %s creation completed" %
                                          (issue['num']))
-                        """分配标签"""
-                        if issue["labels"]:
-                            self._AssignLabels(issue_num, close_token,
-                                               issue["labels"])
-                        merge_pr_info = merge_pr_info + "<tr align=center><td>PR</td><td>%s</td><td>succeed</td><td>%s</td></tr>" \
-                                        % (issue['num'], issue_num)
+                        self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>%s</td><td>succeed</td><td>%s</td></tr>" \
+                                             % (issue['num'], issue_num)
                         Count = 3
 
                     except Exception:
                         """
                         当状态为200或201，异常的原因是转换json失败
+                        400: 非法字符
+                        414: 字符超限制
                         """
                         if IssueStatus == 200 or IssueStatus == 201:
                             traceback.print_exc()
                             Count = 3
-                        elif IssueStatus == 403:
+                        elif IssueStatus == 414 or IssueStatus == 400:
+                            self.logger.error(
+                                "Issue %s creation failed, status code %s, %s"
+                                % (issue['num'], IssueStatus,
+                                   create_response.text))
+                            self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>issue</td><td>%s</td><td>succeed</td><td>%s</td><td>%s</td></tr>" \
+                                                 % (issue['num'], issue_num, IssueStatus)
+                            Count = 3
+                        else:
                             Count += 1
                             self.logger.error(
                                 "Issue %s %s creation failed, status code %s, retry %s"
                                 % (issue['num'], issue['title'], IssueStatus,
                                    Count))
-                            time.sleep(1)
                             if Count == 3:
                                 self.logger.error(
                                     "Issue %s retry %s times, all failed, status code %s"
                                     % (issue['num'], Count, IssueStatus))
-                                merge_pr_info = merge_pr_info + "<tr align=center><td>Issue</td><td>%s</td><td>succeed</td><td>%s</td><td>Status %s</td></tr>" \
-                                                % (issue['num'], issue_num, IssueStatus)
-                        else:
-                            self.logger.error(
-                                "Issue %s creation failed, status code %s, %s"
-                                % (issue['num'], IssueStatus,
-                                   create_response.text))
-                            merge_pr_info = merge_pr_info + "<tr align=center><td>Issue</td><td>%s</td><td>succeed</td><td>%s</td><td>Status %s</td></tr>" \
-                                            % (issue['num'], issue_num, IssueStatus)
-                            Count = 3
+                                self.merge_pr_info = self.merge_pr_info + "<tr align=center><td>Issue</td><td>%s</td><td>succeed</td><td>%s</td><td>%s</td></tr>" \
+                                                     % (issue['num'], issue_num, IssueStatus)
+                            time.sleep(1)
                     time.sleep(1)
             """按日期记录当日创建的issue，方便之后更新状态为closed的操作"""
             if gitee_list:
-                f = open(yesterday_path, 'w', encoding='utf-8')
+                f = open(self.gitee_yesterday, 'w', encoding='utf-8')
                 f.write(str(gitee_list).replace('[', '').replace(']', ''))
                 f.close()
             self.logger.info("The following issues have been migrated %s" %
                              (self.issue_list))
-        """将超过两天的issue状态改为closed"""
-        if os.path.exists(close_path):
-            with open(close_path, 'r', encoding='utf-8') as f:
-                close_list = f.read().split(',')
-                self.logger.info("Read the issue list file successfully")
-                for num in close_list:
-                    res = self._ClosedIssue(num, close_token)
-                    if type(res) != int:
-                        merge_pr_info = merge_pr_info + "<tr align=center><td>Issue</td><td>%s</td><td>closed succeed/td><td>%s</td></tr>" \
-                                        % (issue['num'], issue_num)
-                    else:
-                        merge_pr_info = merge_pr_info + "<tr align=center><td>Issue</td><td>%s</td><td>closed failed/td><td>%s</td><td>%s</td></tr>" \
-                                        % (issue['num'], issue_num, res)
+
+    def main(self):
+        github_header = {
+            'User-Agent': 'Mozilla/5.0',
+            'Authorization': '',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        create_token = ""
+        close_token = ""
+        repo_list = ['']
+        for repo in repo_list:
+            app = self.GithubIssueToGitee(repo, github_header, create_token)
+            app.CreateIssueToGitee()
+            app.ClosedIssue(close_token)
         """发邮件"""
-        if merge_pr_info != '':
-            mail_content = "<html><body><p>Hi, ALL:</p> <p>以下gitee的Issue已经迁移或关闭。请PM留意。</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
-            mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>GithubIssue号</td><td bgcolor='#d0d0d0'>状态</td><td bgcolor='#d0d0d0'>GiteeIssue</td><td bgcolor='#d0d0d0'>错误码</td></tr>" + merge_pr_info + "</table>" + "<p>如有疑问，请@v_杜淳。谢谢</p>" + "</body></html>"
+        if self.merge_pr_info != '':
+            mail_content = "<html><body><p>Hi, ALL:</p> <p>以下为昨日issue迁移及关闭统计表，请PM留意。</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
+            mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>GithubIssue</td><td bgcolor='#d0d0d0'>GiteeIssue</td><td bgcolor='#d0d0d0'>状态</td><td bgcolor='#d0d0d0'>错误码</td></tr>" + self.merge_pr_info + "</table>" + "<p>如有疑问，请@v_杜淳。谢谢</p>" + "</body></html>"
             title = 'Gitee Issue自动迁移'
             receivers = ['v_duchun@baidu.com']
             self.sendMail(title, mail_content, receivers)

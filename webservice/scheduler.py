@@ -4,7 +4,9 @@ from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 from utils.readConfig import ReadConfig
 import logging
 from regularClose_auth import regularClose_job
-from monitor import regularMonitor
+import sys
+sys.path.append("..")
+from gitee.GithubToGitee import GithubIssueToGitee
 import time
 
 localConfig = ReadConfig(path='conf/job.conf')
@@ -32,16 +34,14 @@ def daily_jobs():
     executors = {'default': ThreadPoolExecutor(max_workers=30), \
                  'processpool': ProcessPoolExecutor(max_workers=30)}
     sched = BackgroundScheduler(executors=executors)
-    for job in ['regularClose_job']:
-        cf = localConfig.cf
-        if job == 'regularClose_job':
-            sched.add_job(regularClose_job, cf.get(job, 'type'), day_of_week=cf.get(job, 'day_of_week'), hour=cf.get(job, 'hour'), minute=cf.get(job, 'minute'), \
-                            second=cf.get(job, 'second'), misfire_grace_time=int(cf.get(job, 'misfire_grace_time')))
-        elif job == 'regularMonitor':
-            sched.add_job(
-                regularMonitor,
-                cf.get(job, 'type'),
-                hours=int(cf.get(job, 'hours')))
+    cf = localConfig.cf
+    job = 'regularClose_job'
+    sched.add_job(regularClose_job, cf.get(job, 'type'), day_of_week=cf.get(job, 'day_of_week'), hour=cf.get(job, 'hour'), minute=cf.get(job, 'minute'), \
+                    second=cf.get(job, 'second'), misfire_grace_time=int(cf.get(job, 'misfire_grace_time')))
+    job = 'giteeMigrateIssue_job'
+    sched.add_job(GithubIssueToGitee().main, cf.get(job, 'type'), day_of_week=cf.get(job, 'day_of_week'), hour=cf.get(job, 'hour'), minute=cf.get(job, 'minute'), \
+                    second=cf.get(job, 'second'), misfire_grace_time=int(cf.get(job, 'misfire_grace_time')))
+
     sched.add_listener(job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
     sched._logger = logging
     sched.start()
