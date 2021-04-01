@@ -370,7 +370,3 @@ class Main(object):
         mail.set_title(title)
         mail.set_message(content, messageType='html', encoding='gb2312')
         mail.send()
-
-
-if __name__ == '__main__':
-    Main()
