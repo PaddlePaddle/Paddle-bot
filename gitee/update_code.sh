@@ -20,7 +20,7 @@ function GithubPaddle_env() {
 function GiteePaddle_env() {
     rm -rf ${ROOT_PATH}/gitee_Paddle
     cd ${ROOT_PATH}
-    http_proxy='' https_proxy='' git clone https://gitee.com/paddlepaddle-gardener/Paddle.git gitee_Paddle
+    git clone https://gitee.com/paddlepaddle-gardener/Paddle.git gitee_Paddle
     TARGET_PATH=${ROOT_PATH}/gitee_Paddle
     BRANCH='develop'
     cd ${TARGET_PATH}
@@ -52,6 +52,7 @@ function prepareCommitEnv() {
     newBranch=$2
     ##github checkout current commitid
     cd ${ROOT_PATH}/Paddle
+    git checkout develop
     git checkout $commitId
     ##gitee checkout news bran
     TARGET_PATH=${ROOT_PATH}/gitee_Paddle
@@ -66,7 +67,14 @@ function createPR() {
     cd ${TARGET_PATH}
     git add .
     git commit -m $commitMessage
-    git push origin $newBranch
+    git push -f origin $newBranch
+    push_res=$?
+    while [ $push_res -ne 0 ]
+    do
+        sleep 10s
+        git push origin $newBranch
+        push_res=$?
+    done
     git checkout develop
     git branch -D $newBranch
 }
