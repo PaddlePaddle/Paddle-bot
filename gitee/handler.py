@@ -17,10 +17,15 @@ class GiteePROperation():
     def merge(self, owner, repo, number):
         prMergeUrl = self.prMergeUrl.format(
             owner=owner, repo=repo, number=number)
-        payload = {"access_token": self.access_token}
+        payload = {
+            "access_token": self.access_token,
+            "merge_method": "squash",
+            "prune_source_branch": "true"
+        }
         r = requests.request(
             "PUT",
             prMergeUrl,
             params=payload,
             headers={'Content-Type': 'application/json'})
         print(r.text)
+        return r.status_code

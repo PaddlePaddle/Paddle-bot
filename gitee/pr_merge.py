@@ -6,16 +6,18 @@ from webservice.utils.mail_163 import Mail
 
 def gitee_merge_pr():
     """merge pr"""
-    with open('Paddle-bot/gitee/commitmap.json', 'r') as f:
+    with open('/home/zhangchunle/Paddle-bot/gitee/commitmap.json', 'r') as f:
         data = json.load(f)
         f.close()
     merge_pr_list = []
     for key in data:
         merge_pr_list.append(key)
     merge_pr_list.sort()
+    print(merge_pr_list)
     merge_pr_info = ""
     count = 0
     for PR in merge_pr_list:
+        print("PR: %s" % PR)
         merge_status = GiteePROperation().merge('paddlepaddle', 'Paddle', PR)
         while merge_status not in [200, 201]:
             time.sleep(10)
@@ -35,7 +37,7 @@ def gitee_merge_pr():
         mail_content = "<html><body><p>Hi, ALL:</p> <p>以下gitee的PR/Issue已经被自动merge或关闭。请PM留意。</p> <table border='1' align=center> <caption><font size='3'></font></caption>"
         mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>PR/Issue号</td><td bgcolor='#d0d0d0'>状态</td></tr>" + merge_pr_info + "</table>" + "<p>如有疑问，请@张春乐。谢谢</p>" + "</body></html>"
         title = 'Gitee PR自动merge'
-        receivers = ['xxxe@baidu.com', 'xxx@baidu.com', 'xxxx@baidu.com']
+        receivers = ['xxxx@baidu.com']
         sendMail(title, mail_content, receivers)
 
 
