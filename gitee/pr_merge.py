@@ -6,12 +6,8 @@ from webservice.utils.mail_163 import Mail
 
 def gitee_merge_pr():
     """merge pr"""
-    with open('/home/zhangchunle/Paddle-bot/gitee/commitmap.json', 'r') as f:
-        data = json.load(f)
-        f.close()
-    merge_pr_list = []
-    for key in data:
-        merge_pr_list.append(key)
+    merge_pr_list = GiteePROperation().getPRListWithOpenStatus('paddlepaddle',
+                                                               'Paddle')
     merge_pr_list.sort()
     print(merge_pr_list)
     merge_pr_info = ""
