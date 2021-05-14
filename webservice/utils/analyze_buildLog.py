@@ -454,6 +454,7 @@ def analyze_failed_cause(index_dict, target_url):
     analysis_ci_index['EXCODE'] = EXCODE
     analysis_ci_index['triggerUser'] = index_dict['triggerUser']
     analysis_ci_index['targetUrl'] = target_url
+    isSkipTest = 0
     if EXCODE in [0, 4]:  #2代码冲突，6需要approve, 4代码风格不符合
         isException = 0
     elif EXCODE == 2:
@@ -625,7 +626,15 @@ def analyze_failed_cause(index_dict, target_url):
 
     elif EXCODE == 1:
         isException = 0  #EXCODE==1时暂定为非异常
+
+    if index_dict['ciName'] == 'PR-CI-Model-benchmark':
+        f = open('buildLog/%s' % filename, 'r')
+        data = f.read()
+        if 'paddle whl does not diff in PR-CI-Model-benchmark, so skip this ci' in data:
+            isSkipTest = 1
+
     analysis_ci_index['isException'] = isException
+    analysis_ci_index['isSkipTest'] = isSkipTest
     logger.info("EXCODE: %s, isException: %s" % (EXCODE, isException))
     logger.info("analysis_ci_index: %s" % analysis_ci_index)
     db = Database()
