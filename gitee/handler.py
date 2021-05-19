@@ -29,3 +29,21 @@ class GiteePROperation():
             headers={'Content-Type': 'application/json'})
         print(r.text)
         return r.status_code
+
+    def getPRListWithOpenStatus(self, owner, repo):
+        PRList = []
+        prUrl = self.prUrl.format(owner=owner, repo=repo)
+        payload = {
+            "access_token": self.access_token,
+            "per_page": 100,
+            "state": "open"
+        }
+        r = requests.request(
+            "GET",
+            prUrl,
+            params=payload,
+            headers={'Content-Type': 'application/json'})
+        for item in r.json():
+            PR = item['number']
+            PRList.append(PR)
+        return PRList
