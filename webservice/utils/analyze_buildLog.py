@@ -664,6 +664,10 @@ def analyze_failed_cause(index_dict, target_url):
         if 'ipipe_log_param_PRECISION_TEST' in data:
             PRECISION_TEST = data.split('ipipe_log_param_PRECISION_TEST:', 1)
             PRECISION_TEST = PRECISION_TEST[1:][0].split('\n')[0].strip()
+            if PRECISION_TEST == 'false':
+                PRECISION_TEST = False
+            elif PRECISION_TEST == 'true':
+                PRECISION_TEST = True
 
     analysis_ci_index['isException'] = isException
     analysis_ci_index['isSkipTest'] = isSkipTest
