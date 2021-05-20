@@ -454,6 +454,16 @@ def analyze_failed_cause(index_dict, target_url):
     analysis_ci_index['EXCODE'] = EXCODE
     analysis_ci_index['triggerUser'] = index_dict['triggerUser']
     analysis_ci_index['targetUrl'] = target_url
+    SkipTestCi = localConfig.cf.get('CIIndexScope', 'Paddle_skip_test_ci')
+    PRECISION_TEST_CI = localConfig.cf.get('CIIndexScope',
+                                           'Paddle_PRECISION_TEST')
+    isSkipTest = 0
+    isSkipDir = 0
+    PRECISION_TEST = None
+    PRECISION_TEST_Cases_count = None
+    PRECISION_TEST_Cases_ratio = None
+    notHitMapFiles = None
+
     if EXCODE in [0, 4]:  #2代码冲突，6需要approve, 4代码风格不符合
         isException = 0
     elif EXCODE == 2:
@@ -625,7 +635,47 @@ def analyze_failed_cause(index_dict, target_url):
 
     elif EXCODE == 1:
         isException = 0  #EXCODE==1时暂定为非异常
+
+    if index_dict['ciName'] in SkipTestCi:
+        f = open('buildLog/%s' % filename, 'r')
+        data = f.read()
+        if 'paddle whl does not diff in PR-CI-Model-benchmark, so skip this ci' in data:
+            isSkipTest = 1
+        if 'ipipe_log_param_isSkipDir_model_benchmark' in data:
+            isSkipDir = 1
+
+    # 获取精准测试监控指标
+    if index_dict['ciName'] in PRECISION_TEST_CI:
+        f = open('buildLog/%s' % filename, 'r')
+        data = f.read()
+        if 'ipipe_log_param_PRECISION_TEST_Cases_count' in data:
+            PRECISION_TEST_Cases_count = data.split(
+                'ipipe_log_param_PRECISION_TEST_Cases_count:', 1)
+            PRECISION_TEST_Cases_count = PRECISION_TEST_Cases_count[1:][
+                0].split('\n')[0].strip()
+        if 'ipipe_log_param_PRECISION_TEST_Cases_ratio' in data:
+            PRECISION_TEST_Cases_ratio = data.split(
+                'ipipe_log_param_PRECISION_TEST_Cases_ratio:', 1)
+            PRECISION_TEST_Cases_ratio = PRECISION_TEST_Cases_ratio[1:][
+                0].split('\n')[0].strip()
+        if 'notHitMapFiles' in data:
+            notHitMapFiles = data.split('notHitMapFiles:', 1)
+            notHitMapFiles = notHitMapFiles[1:][0].split('\n')[0].strip()
+        if 'ipipe_log_param_PRECISION_TEST' in data:
+            PRECISION_TEST = data.split('ipipe_log_param_PRECISION_TEST:', 1)
+            PRECISION_TEST = PRECISION_TEST[1:][0].split('\n')[0].strip()
+            if PRECISION_TEST == 'false':
+                PRECISION_TEST = False
+            elif PRECISION_TEST == 'true':
+                PRECISION_TEST = True
+
     analysis_ci_index['isException'] = isException
+    analysis_ci_index['isSkipTest'] = isSkipTest
+    analysis_ci_index['isSkipDir'] = isSkipDir
+    analysis_ci_index['PRECISION_TEST'] = PRECISION_TEST
+    analysis_ci_index['PRECISION_TEST_count'] = PRECISION_TEST_Cases_count
+    analysis_ci_index['PRECISION_TEST_ratio'] = PRECISION_TEST_Cases_ratio
+    analysis_ci_index['PRECISION_TEST_notHitMapFiles'] = notHitMapFiles
     logger.info("EXCODE: %s, isException: %s" % (EXCODE, isException))
     logger.info("analysis_ci_index: %s" % analysis_ci_index)
     db = Database()
