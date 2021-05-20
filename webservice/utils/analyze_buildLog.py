@@ -646,26 +646,24 @@ def analyze_failed_cause(index_dict, target_url):
 
     # 获取精准测试监控指标
     if index_dict['ciName'] in PRECISION_TEST_CI:
-        with open('buildLog/%s' % filename, 'r') as f:
-            for data in f.readlines():
-                if 'ipipe_log_param_PRECISION_TEST_Cases_count' in data:
-                    PRECISION_TEST_Cases_count = int(
-                        data.split(':')[-1].replace('\n', '').replace(' ', ''))
-                elif 'ipipe_log_param_PRECISION_TEST_Cases_ratio' in data:
-                    PRECISION_TEST_Cases_ratio = data.split(':')[-1].replace(
-                        '\n', '').replace(' ', '')
-                    PRECISION_TEST_Cases_ratio = round(
-                        float(PRECISION_TEST_Cases_ratio), 2)
-                elif 'notHitMapFiles' in data:
-                    notHitMapFiles = data.split(':')[-1].replace(
-                        '\n', '').replace(' ', '')
-                elif 'ipipe_log_param_PRECISION_TEST' in data:
-                    PRECISION_TEST = data.split(':')[-1].replace(
-                        '\n', '').replace(' ', '')
-                    if PRECISION_TEST == 'false':
-                        PRECISION_TEST = False
-                    elif PRECISION_TEST == 'true':
-                        PRECISION_TEST = True
+        f = open('buildLog/%s' % filename, 'r')
+        data = f.read()
+        if 'ipipe_log_param_PRECISION_TEST_Cases_count' in data:
+            PRECISION_TEST_Cases_count = data.split(
+                'ipipe_log_param_PRECISION_TEST_Cases_count:', 1)
+            PRECISION_TEST_Cases_count = PRECISION_TEST_Cases_count[1:][
+                0].split('\n')[0].strip()
+        if 'ipipe_log_param_PRECISION_TEST_Cases_ratio' in data:
+            PRECISION_TEST_Cases_ratio = data.split(
+                'ipipe_log_param_PRECISION_TEST_Cases_ratio:', 1)
+            PRECISION_TEST_Cases_ratio = PRECISION_TEST_Cases_ratio[1:][
+                0].split('\n')[0].strip()
+        if 'notHitMapFiles' in data:
+            notHitMapFiles = data.split('notHitMapFiles:', 1)
+            notHitMapFiles = notHitMapFiles[1:][0].split('\n')[0].strip()
+        if 'ipipe_log_param_PRECISION_TEST' in data:
+            PRECISION_TEST = data.split('ipipe_log_param_PRECISION_TEST:', 1)
+            PRECISION_TEST = PRECISION_TEST[1:][0].split('\n')[0].strip()
 
     analysis_ci_index['isException'] = isException
     analysis_ci_index['isSkipTest'] = isSkipTest
