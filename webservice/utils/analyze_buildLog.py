@@ -669,6 +669,16 @@ def analyze_failed_cause(index_dict, target_url):
             elif PRECISION_TEST == 'true':
                 PRECISION_TEST = True
 
+    # 过滤commit包含关键字document_fix
+    db = Database()
+    query_stat = "select documentfix from paddle_ci_status where commitId='%s' and ciName='%s'" % (
+        index_dict['commitId'], index_dict['ciName'])
+    document_fix = list(db.query(query_stat))[0][0]['documentfix']
+    if document_fix == True:
+        description = 'document_fix'
+    else:
+        description = None
+
     analysis_ci_index['isException'] = isException
     analysis_ci_index['isSkipTest'] = isSkipTest
     analysis_ci_index['isSkipDir'] = isSkipDir
@@ -676,6 +686,7 @@ def analyze_failed_cause(index_dict, target_url):
     analysis_ci_index['PRECISION_TEST_count'] = PRECISION_TEST_Cases_count
     analysis_ci_index['PRECISION_TEST_ratio'] = PRECISION_TEST_Cases_ratio
     analysis_ci_index['PRECISION_TEST_notHitMapFiles'] = notHitMapFiles
+    analysis_ci_index['description'] = description
     logger.info("EXCODE: %s, isException: %s" % (EXCODE, isException))
     logger.info("analysis_ci_index: %s" % analysis_ci_index)
     db = Database()
