@@ -214,6 +214,8 @@ def getDetailsCIIndex(basic_ci_index, target_url):
     detailed_ci_index_dict['endTime'] = basic_ci_index[
         'paddle_build_endTime'] if 'paddle_build_endTime' in basic_ci_index else basic_ci_index[
             'docker_build_endTime']
+    detailed_ci_index_dict['documentfix'] = basic_ci_index['documentfix']
+
     filename = '%s_%s_%s.log' % (ciName, commitId,
                                  basic_ci_index['commit_createTime'])
     f = open('buildLog/%s' % filename, 'r')
@@ -454,6 +456,12 @@ def analyze_failed_cause(index_dict, target_url):
     analysis_ci_index['EXCODE'] = EXCODE
     analysis_ci_index['triggerUser'] = index_dict['triggerUser']
     analysis_ci_index['targetUrl'] = target_url
+    analysis_ci_index['description'] = index_dict['documentfix']
+
+    # 过滤commit包含关键字document_fix
+    if analysis_ci_index['description'] == True:
+        analysis_ci_index['description'] = 'document_fix'
+
     SkipTestCi = localConfig.cf.get('CIIndexScope', 'Paddle_skip_test_ci')
     PRECISION_TEST_CI = localConfig.cf.get('CIIndexScope',
                                            'Paddle_PRECISION_TEST')
@@ -669,16 +677,6 @@ def analyze_failed_cause(index_dict, target_url):
             elif PRECISION_TEST == 'true':
                 PRECISION_TEST = True
 
-    # 过滤commit包含关键字document_fix
-    db = Database()
-    query_stat = "select documentfix from paddle_ci_status where commitId='%s' and ciName='%s'" % (
-        index_dict['commitId'], index_dict['ciName'])
-    document_fix = list(db.query(query_stat))[0][0]['documentfix']
-    if document_fix == True:
-        description = 'document_fix'
-    else:
-        description = None
-
     analysis_ci_index['isException'] = isException
     analysis_ci_index['isSkipTest'] = isSkipTest
     analysis_ci_index['isSkipDir'] = isSkipDir
@@ -686,7 +684,6 @@ def analyze_failed_cause(index_dict, target_url):
     analysis_ci_index['PRECISION_TEST_count'] = PRECISION_TEST_Cases_count
     analysis_ci_index['PRECISION_TEST_ratio'] = PRECISION_TEST_Cases_ratio
     analysis_ci_index['PRECISION_TEST_notHitMapFiles'] = notHitMapFiles
-    analysis_ci_index['description'] = description
     logger.info("EXCODE: %s, isException: %s" % (EXCODE, isException))
     logger.info("analysis_ci_index: %s" % analysis_ci_index)
     db = Database()
