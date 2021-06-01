@@ -456,10 +456,10 @@ def analyze_failed_cause(index_dict, target_url):
     analysis_ci_index['EXCODE'] = EXCODE
     analysis_ci_index['triggerUser'] = index_dict['triggerUser']
     analysis_ci_index['targetUrl'] = target_url
-    analysis_ci_index['description'] = index_dict['documentfix']
+    document_fix = index_dict['documentfix']
 
     # 过滤commit包含关键字document_fix
-    if analysis_ci_index['description'] == True:
+    if document_fix == index_dict['documentfix'] == True:
         analysis_ci_index['description'] = 'document_fix'
 
     SkipTestCi = localConfig.cf.get('CIIndexScope', 'Paddle_skip_test_ci')
