@@ -78,6 +78,18 @@ def getBasicCIIndex(repo, sha, document_fix, target_url):
                     'startTime'])[:-3])  #commit提交时间/rerun时间
             basic_ci_index_dict['commit_createTime'] = commit_createTime
             docker_build_status = 'SUCC'  #默认认为构建镜像阶段是成功的
+
+            # 判断是否为跳过跑CI的PR，如果是需给以下几个key赋值，均为0即可
+            if res["pipelineBuildBean"]["reason"] == 'SKIP':
+                basic_ci_index_dict['docker_build_startTime'] = 0
+                basic_ci_index_dict['docker_build_endTime'] = 0
+                basic_ci_index_dict['EXCODE'] = 0
+                basic_ci_index_dict['paddle_build_startTime'] = 0
+                basic_ci_index_dict['paddle_build_endTime'] = 0
+                basic_ci_index_dict['waitTime_total'] = 0  #排队总时间
+                basic_ci_index_dict['execTime_total'] = 0  #执行总时间
+                return basic_ci_index_dict
+
             for job in jobGroupBuildBeans:
                 jobName = job['jobName']
                 if jobName in ['构建镜像', 'build-docker-image']:
