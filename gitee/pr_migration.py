@@ -70,7 +70,7 @@ class GithubRepo(object):
         changeFiles_dict['modified'] = []
         changeFiles_dict['removed'] = []
         changeFiles_dict['added'] = []
-        changeFiles_dict['renamed'] = []
+        changeFiles_dict['renamed'] = []  #
         for f in response['files']:
             if f['status'] == 'modified':
                 changeFiles_dict['modified'].append(f['filename'])
@@ -87,6 +87,13 @@ class GithubRepo(object):
         PR = res['items'][0]['number']
         return changeFiles_dict, PR
 
+    def getPRMergeCommit(self, PR):
+        PRUrl = '%s/%s' % (self.prUrl.format(
+            owner='PaddlePaddle', repo='Paddle'), PR)
+        response = requests.get(PRUrl, headers=self.headers).json()
+        merge_commit_sha = response['merge_commit_sha']
+        return merge_commit_sha
+
 
 class giteeRepo():
     def __init__(self):
@@ -94,7 +101,9 @@ class giteeRepo():
         self.commitUrl = 'https://gitee.com/api/v5/repos/{owner}/{repo}/commits'
         self.giteePaddlePath = '/home/zhangchunle/Paddle-bot/gitee/gitee_Paddle'
         self.githubPaddlePath = '/home/zhangchunle/Paddle-bot/gitee/Paddle'
-        self.headers = {'authorization': 'token xxxxx'}
+        self.headers = {
+            'authorization': 'token 04388373ac19b581f4d2e8238131b20a'
+        }
         self.operation = GiteePROperation()
 
     def getlastestPR(self):
@@ -103,7 +112,6 @@ class giteeRepo():
             owner='paddlepaddle', repo='Paddle') + '?state=merged'
         response = requests.get(prUrl)
         lastestPR = response.json()[0]['number']
-
         return lastestPR
 
     def getlastestCommit(self):
@@ -112,6 +120,14 @@ class giteeRepo():
         response = requests.get(commitUrl)
         lastestCommit = response.json()[0]['sha']
         return lastestCommit
+
+    def getGithubPRInlastestPR(self, PR):
+        commitUrl = self.prUrl.format(
+            owner='paddlepaddle', repo='Paddle') + '/%s' % PR + '/commits'
+        response = requests.get(commitUrl)
+        githubPR = response.json()[0]['commit']['message'].split('_')[1].strip(
+        )
+        return githubPR
 
     def prepareGiteeFiles(self, commitid, branch, title, changeFiles):
         for file_type in changeFiles:
@@ -131,6 +147,8 @@ class giteeRepo():
                                self.giteePaddlePath, filename))
             elif file_type == 'removed':
                 for filename in changeFiles[file_type]:
+                    print('remove file: %s/%s' %
+                          (self.giteePaddlePath, filename))
                     os.system('rm -rf %s/%s' %
                               (self.giteePaddlePath, filename))
             elif file_type == 'renamed':
@@ -160,6 +178,7 @@ class giteeRepo():
             params=payload,
             data=json.dumps(data),
             headers={'Content-Type': 'application/json'})
+
         if response.status_code == 400 and '不存在差异' in response.json()[
                 'message']:
             return None, None
@@ -197,16 +216,6 @@ class githubPrMigrateGitee():
         self.giteePaddle = giteeRepo()
         self.githubPaddle = GithubRepo()
 
-    def tranGiteeCommittoGithubCommit(self):
-        """
-        gitee的commitid与GitHub的不一致
-        """
-        with open('/home/zhangchunle/Paddle-bot/gitee/commitmap.json',
-                  'r') as f:
-            data = json.load(f)
-            f.close()
-        return data
-
     def ifPRconflict(self, changeFiles):
         """
         当天提交的PR是否可能有PR冲突
@@ -241,34 +250,19 @@ class githubPrMigrateGitee():
         os.system(
             'bash /home/zhangchunle/Paddle-bot/gitee/update_code.sh githubPaddle'
         )
-
         now = datetime.datetime.now()
         beforeTime = now - datetime.timedelta(
             hours=now.hour,
             minutes=now.minute,
             seconds=now.second,
             microseconds=now.microsecond)
-        print(beforeTime)
-
-        #lastestCommit_gitee = self.giteePaddle.getlastestCommit()
-        #print(lastestCommit_gitee)
-        #CommitList_github = self.githubPaddle.getCommitList(lastestCommit_gitee, beforeTime)
-        #print(CommitList_github)
 
         lastestPR_gitee = self.giteePaddle.getlastestPR()
-
-        commitmap = self.tranGiteeCommittoGithubCommit()
-        commitId_github = commitmap['%s' % lastestPR_gitee]['githubCommitId']
+        GithubPR = self.giteePaddle.getGithubPRInlastestPR(lastestPR_gitee)
+        commitId_github = self.githubPaddle.getPRMergeCommit(GithubPR)
         CommitList_github = self.githubPaddle.getCommitList(commitId_github,
                                                             beforeTime)
-        commit_map = {}
-        with open('/home/zhangchunle/Paddle-bot/gitee/commitmap.json',
-                  'w') as f:  #清空commit map
-            json.dump(commit_map, f)
-            f.close()
         for commitId in CommitList_github[::-1]:
-            print(commitId)
-            commit_map_value = {}
             changeFiles, PR = self.githubPaddle.getPRchangeFiles(commitId)
             ifconflict = self.ifPRconflict(changeFiles)
             if ifconflict == True:
@@ -277,12 +271,11 @@ class githubPrMigrateGitee():
                 os.system(
                     'bash /home/zhangchunle/Paddle-bot/gitee/update_code.sh giteePaddle'
                 )  # merge后要更新环境
-                commit_map = {}
-            commit_map_value['changeFiles'] = changeFiles
-            commit_map_value['githubCommitId'] = commitId
             branch, title, body = self.githubPaddle.getPRtitleAndBody(PR)
             if branch == 'develop':
                 branch = 'dev_pr_%s' % int(time.time())
+            else:
+                branch = '%s_%s' % (branch, int(time.time()))
             branch = branch.replace('/', '_')
             os.system(
                 'bash /home/zhangchunle/Paddle-bot/gitee/update_code.sh migrateEnv %s %s'
@@ -296,14 +289,7 @@ class githubPrMigrateGitee():
             PR, sha = self.giteePaddle.create_pr(branch, title, body)
             if PR == None:
                 break
-            else:
-                commit_map_value['sha'] = sha
-                commit_map[PR] = commit_map_value
-                with open('/home/zhangchunle/Paddle-bot/gitee/commitmap.json',
-                          'w') as f:
-                    json.dump(commit_map, f)
-                    f.close()
-            time.sleep(2)
+            time.sleep(5)
 
 
 githubPrMigrateGitee().main()
