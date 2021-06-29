@@ -19,7 +19,7 @@ class GithubRepo(object):
     def __init__(self):
         self.commitUrl = 'https://api.github.com/repos/{owner}/{repo}/commits'
         self.prUrl = 'https://api.github.com/repos/{owner}/{repo}/pulls'
-        self.headers = {'authorization': "token xx"}
+        self.headers = {'authorization': "token xxxxxxx"}
 
     def utcTimeToStrTime(self, utcTime):
         """utc时间转换为当地时间"""
