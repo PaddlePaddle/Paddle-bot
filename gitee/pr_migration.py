@@ -101,9 +101,7 @@ class giteeRepo():
         self.commitUrl = 'https://gitee.com/api/v5/repos/{owner}/{repo}/commits'
         self.giteePaddlePath = '/home/zhangchunle/Paddle-bot/gitee/gitee_Paddle'
         self.githubPaddlePath = '/home/zhangchunle/Paddle-bot/gitee/Paddle'
-        self.headers = {
-            'authorization': 'token 04388373ac19b581f4d2e8238131b20a'
-        }
+        self.headers = {'authorization': 'token xxx'}
         self.operation = GiteePROperation()
 
     def getlastestPR(self):
@@ -125,8 +123,8 @@ class giteeRepo():
         commitUrl = self.prUrl.format(
             owner='paddlepaddle', repo='Paddle') + '/%s' % PR + '/commits'
         response = requests.get(commitUrl)
-        githubPR = response.json()[0]['commit']['message'].split('_')[1].strip(
-        )
+        githubPR = response.json()[-1]['commit']['message'].split('_')[
+            1].strip()
         return githubPR
 
     def prepareGiteeFiles(self, commitid, branch, title, changeFiles):
@@ -165,7 +163,7 @@ class giteeRepo():
         return PR, commitId
         """
         prUrl = self.prUrl.format(owner='paddlepaddle', repo='Paddle')
-        payload = {"access_token": "xxxx"}
+        payload = {"access_token": "xxx"}
         data = {
             "title": "%s" % title,
             "head": "PaddlePaddle-Gardener:%s" % branch,
@@ -178,10 +176,9 @@ class giteeRepo():
             params=payload,
             data=json.dumps(data),
             headers={'Content-Type': 'application/json'})
-
         if response.status_code == 400 and '不存在差异' in response.json()[
                 'message']:
-            return None, None
+            return 1, 1
         else:
             count = 0
             while response.status_code not in [200, 201]:
@@ -191,6 +188,8 @@ class giteeRepo():
                     prUrl,
                     params=payload,
                     headers={'Content-Type': 'application/json'})
+                print(response)
+                print(response.text)
                 count += 1
                 if count >= 3:
                     break
@@ -215,16 +214,13 @@ class githubPrMigrateGitee():
     def __init__(self):
         self.giteePaddle = giteeRepo()
         self.githubPaddle = GithubRepo()
+        self.changeFiles_default = []
 
     def ifPRconflict(self, changeFiles):
         """
         当天提交的PR是否可能有PR冲突
         """
         ifconflict = False
-        with open('/home/zhangchunle/Paddle-bot/gitee/commitmap.json',
-                  'r') as f:
-            data = json.load(f)
-            f.close()
         changeFiles_list = []
         for file_type in changeFiles:
             if file_type == 'renamed':
@@ -234,13 +230,17 @@ class githubPrMigrateGitee():
             else:
                 for filename in changeFiles[file_type]:
                     changeFiles_list.append(filename)
-        for key in data:
-            for filename in changeFiles_list:
-                if filename in data[key]['changeFiles']:
-                    ifconflict = True
-                    break
-            if ifconflict == True:
+        for filename in changeFiles_list:
+            if filename in self.changeFiles_default:
+                ifconflict = True
+                self.changeFiles_default = []
                 break
+            else:
+                self.changeFiles_default.append(filename)
+        if ifconflict == True:
+            for filename in changeFiles_list:
+                self.changeFiles_default.append(filename)
+        print("changeFiles_default: %s" % self.changeFiles_default)
         return ifconflict
 
     def main(self):
@@ -256,6 +256,7 @@ class githubPrMigrateGitee():
             minutes=now.minute,
             seconds=now.second,
             microseconds=now.microsecond)
+        print(beforeTime)
 
         lastestPR_gitee = self.giteePaddle.getlastestPR()
         GithubPR = self.giteePaddle.getGithubPRInlastestPR(lastestPR_gitee)
@@ -287,7 +288,9 @@ class githubPrMigrateGitee():
                 'bash /home/zhangchunle/Paddle-bot/gitee/update_code.sh prepareCode %s %s mirgate_%s'
                 % (commitId, branch, PR))
             PR, sha = self.giteePaddle.create_pr(branch, title, body)
-            if PR == None:
+            if PR == 1 and sha == 1:
+                continue
+            elif PR == None:
                 break
             time.sleep(5)
 
