@@ -291,11 +291,11 @@ class githubPrMigrateGitee():
             os.system(
                 'bash /home/zhangchunle/Paddle-bot/gitee/update_code.sh prepareCode %s %s mirgate_%s'
                 % (commitId, branch, PR))
-            PR, sha = self.giteePaddle.create_pr(branch, title, body)
-            if PR == 1 and sha == 1:
+            flag, sha = self.giteePaddle.create_pr(branch, title, body)
+            if flag == 1 and sha == 1:
                 singleton.set_pr_migrate_state( PR, 'success' )
                 continue
-            elif PR == None:
+            elif flag == None:
                 singleton.set_pr_migrate_state( PR, 'fail' )
                 break
             time.sleep(5)
