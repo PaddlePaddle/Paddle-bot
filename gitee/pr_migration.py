@@ -293,10 +293,10 @@ class githubPrMigrateGitee():
                 % (commitId, branch, PR))
             PR, sha = self.giteePaddle.create_pr(branch, title, body)
             if PR == 1 and sha == 1:
-                singleton.set_pr_migrate_state( PR, '迁移状态', 'success' )
+                singleton.set_pr_migrate_state( PR, 'success' )
                 continue
             elif PR == None:
-                singleton.set_pr_migrate_state( PR, '迁移状态', 'fail' )
+                singleton.set_pr_migrate_state( PR, 'fail' )
                 break
             time.sleep(5)
         content = singleton.to_html()

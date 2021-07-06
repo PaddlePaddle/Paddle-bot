@@ -27,7 +27,7 @@ def gitee_merge_pr():
         if merge_status in [200, 201]:
             merge_pr_info = merge_pr_info + "<tr align=center><td>PR</td><td>{}</td><td>merged succeed</td></tr>".format(
                 PR)
-            singleton.set_pr_merge_state( PR, 'merged状态', '已合入' )
+            singleton.set_pr_merge_state( PR, '已合入' )
         else:
             merge_pr_info = merge_pr_info + "<tr align=center><td>PR</td><td>{}</td><td>merged failed</td></tr>".format(
                 PR)
