@@ -1,7 +1,7 @@
 from gidgethub import routing
 from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, getPRnum, ifCancelXly, getCommitComments, xlyJob
 from utils.readConfig import ReadConfig
-from utils.analyze_buildLog import ifDocumentFix, ifAlreadyExist, getBasicCIIndex, getDetailsCIIndex
+from utils.analyze_buildLog import ifDocumentFix, ifAlreadyExist, analysisBuildLog
 from utils.db import Database
 from utils.convert import javaTimeTotimeStamp
 import time
@@ -232,10 +232,12 @@ async def get_ci_index(event, gh, repo, *args, **kwargs):
             state = event.data['state']
             commitId = event.data['sha']
             ciName = event.data['context']
+            triggerUser = event.data['commit']['committer']['login']
             basic_ci_index_dict['ciName'] = ciName
             basic_ci_index_dict['commitId'] = commitId
             basic_ci_index_dict['status'] = state
             basic_ci_index_dict['repo'] = repo
+            basic_ci_index_dict['triggerUser'] = triggerUser
             ifCancel = task.CancelJobByXly(target_url)
             if ifCancel == False:  #CI被取消的不写入数据库
                 if repo not in ['PaddlePaddle/Paddle']:  #没有test=documentfix的情况
@@ -246,10 +248,16 @@ async def get_ci_index(event, gh, repo, *args, **kwargs):
                     commit_message = event.data['commit']['commit']['message']
                     document_fix = ifDocumentFix(commit_message)
                 basic_ci_index_dict['documentfix'] = '%s' % document_fix
-                timeciindex = getBasicCIIndex(repo, commitId, document_fix,
-                                              target_url)
-                for key in timeciindex:
-                    basic_ci_index_dict[key] = timeciindex[key]
+                if 'iscan' in ciName.lower():
+                    basic_ci_index_dict[
+                        'EXCODE'] = 0 if state == 'success' else 1
+                else:
+                    analysis_Log_object = analysisBuildLog(repo, commitId,
+                                                           target_url)
+                    timeciindex = analysis_Log_object.getBasicCIIndex(
+                        document_fix)
+                    for key in timeciindex:
+                        basic_ci_index_dict[key] = timeciindex[key]
                 ifInsert = False  #查询30s内是否已经插入数据了
                 insertTime = int(time.time())
                 query_stat = "SELECT * FROM paddle_ci_status WHERE ciName='%s' and commitId='%s' and status='%s' order by time desc" % (
@@ -281,36 +289,32 @@ async def get_ci_index(event, gh, repo, *args, **kwargs):
                     if ciName.startswith(Paddle_container_detailed_ci_tuple
                                          ) or ciName.startswith(
                                              Paddle_sa_detailed_ci_tuple):
-                        if basic_ci_index_dict['EXCODE'] not in [
-                                2, 7
-                        ]:  #build error Not in paddle_ci_index
-                            detailed_ci_index_dict = getDetailsCIIndex(
-                                basic_ci_index_dict, target_url)
-                            logger.info("detailed_ci_index: %s" %
-                                        detailed_ci_index_dict)
-                            insertTime = int(time.time())
-                            query_stat = "SELECT * FROM paddle_ci_index WHERE ciName='%s' and commitId='%s' and PR=%s order by time desc" % (
-                                detailed_ci_index_dict['ciName'],
-                                detailed_ci_index_dict['commitId'],
-                                detailed_ci_index_dict['PR'])
-                            queryTime_index = ifAlreadyExist(query_stat)
-                            if queryTime_index != '':
-                                ifInsert = False if insertTime - queryTime_index < 30 else True
-                            if ifInsert == False:
-                                result = db.insert('paddle_ci_index',
-                                                   detailed_ci_index_dict)
-                                if result == True:
-                                    logger.info(
-                                        '%s %s %s insert paddle_ci_index success!'
-                                        % (ciName,
-                                           detailed_ci_index_dict['PR'],
-                                           commitId))
-                                else:
-                                    logger.info(
-                                        '%s %s %s insert paddle_ci_index failed!'
-                                        % (ciName,
-                                           detailed_ci_index_dict['PR'],
-                                           commitId))
+                        detailed_ci_index_dict = analysis_Log_object.getDetailsCIIndex(
+                            basic_ci_index_dict)
+                        logger.info("detailed_ci_index: %s" %
+                                    detailed_ci_index_dict)
+                        insertTime = int(time.time())
+                        query_stat = "SELECT * FROM paddle_ci_index WHERE ciName='%s' and commitId='%s' and PR=%s order by time desc" % (
+                            detailed_ci_index_dict['ciName'],
+                            detailed_ci_index_dict['commitId'],
+                            detailed_ci_index_dict['PR'])
+                        queryTime_index = ifAlreadyExist(query_stat)
+
+                        if queryTime_index != '':
+                            ifInsert = False if insertTime - queryTime_index < 30 else True
+                        if ifInsert == False:
+                            result = db.insert('paddle_ci_index',
+                                               detailed_ci_index_dict)
+                            if result == True:
+                                logger.info(
+                                    '%s %s %s insert paddle_ci_index success!'
+                                    % (ciName, detailed_ci_index_dict['PR'],
+                                       commitId))
+                            else:
+                                logger.info(
+                                    '%s %s %s insert paddle_ci_index failed!' %
+                                    (ciName, detailed_ci_index_dict['PR'],
+                                     commitId))
 
 
 @router.register("status")
