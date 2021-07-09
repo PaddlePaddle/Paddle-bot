@@ -159,7 +159,6 @@ class giteeRepo():
                               (self.giteePaddlePath, old_name,
                                self.giteePaddlePath, new_name))
 
-
     def create_pr(self, branch, title, body):
         """
         create a pr
@@ -173,19 +172,21 @@ class giteeRepo():
             "base": "develop",
             "body": body
         }
-        def send_create_pr_request( prUrl, payload, data ):
-            return requests.request(
-                                  "POST",
-                                  prUrl,
-                                  params=payload,
-                                  data=json.dumps(data),
-                                  headers={'Content-Type': 'application/json'})
 
-        def send_create_pr_request_three_times_or_success( response, prUrl, payload, data):
+        def send_create_pr_request(prUrl, payload, data):
+            return requests.request(
+                "POST",
+                prUrl,
+                params=payload,
+                data=json.dumps(data),
+                headers={'Content-Type': 'application/json'})
+
+        def send_create_pr_request_three_times_or_success(response, prUrl,
+                                                          payload, data):
             count = 0
             while response.status_code not in [200, 201]:
                 time.sleep(10)
-                response = send_create_pr_request( prUrl, payload, data )
+                response = send_create_pr_request(prUrl, payload, data)
                 print(response)
                 print(response.text)
                 count += 1
@@ -193,17 +194,19 @@ class giteeRepo():
                     break
             return response
 
-        response = send_create_pr_request( prUrl, payload, data )
+        response = send_create_pr_request(prUrl, payload, data)
         if response.status_code == 400 and '不存在差异' in response.json()[
                 'message']:
             return 1, 1
         else:
-            response = send_create_pr_request_three_times_or_success(response, prUrl, payload, data)
+            response = send_create_pr_request_three_times_or_success(
+                response, prUrl, payload, data)
             if response.status_code not in [200, 201]:
                 # set body to "test" and try again
-                data[ "body" ] = "test"
-                response = send_create_pr_request_three_times_or_success(response, prUrl, payload, data)
-            
+                data["body"] = "test"
+                response = send_create_pr_request_three_times_or_success(
+                    response, prUrl, payload, data)
+
             if response.status_code in [200, 201]:
                 PR = response.json()['number']
                 sha = response.json()['head']['sha']
@@ -212,7 +215,9 @@ class giteeRepo():
                 return PR, sha
             else:
                 title = '[告警]Gitee提交PR失败'
-                receivers = ['zhangchunle@baidu.com', 'jiangxinzhou01@baidu.com']
+                receivers = [
+                    'zhangchunle@baidu.com', 'jiangxinzhou01@baidu.com'
+                ]
                 mail_content = 'PR: %s, data: %s, %s' % (prUrl, data,
                                                          response.text)
                 sendMail(title, mail_content, receivers)
@@ -277,13 +282,13 @@ class githubPrMigrateGitee():
         print('len(commitlist)=', len(CommitList_github))
         for commitId in CommitList_github[::-1]:
             changeFiles, PR = self.githubPaddle.getPRchangeFiles(commitId)
-            pr_state = PRState( PR )
+            pr_state = PRState(PR)
             ifconflict = self.ifPRconflict(changeFiles)
             if ifconflict == True:
                 gitee_merge_pr()
                 time.sleep(10)
                 os.system(
-                    'bash /home/zhangchunle/Paddle-bot/gitee/update_code.sh giteePaddle'
+                    'bash /home/zhangchunle/Paddle-bot/gitee/update_code.sh giteePaddle_env_update'
                 )  # merge后要更新环境
             branch, title, body = self.githubPaddle.getPRtitleAndBody(PR)
             if branch == 'develop':
@@ -303,26 +308,26 @@ class githubPrMigrateGitee():
             github_pr = PR
             gitee_pr, sha = self.giteePaddle.create_pr(branch, title, body)
             if gitee_pr == 1 and sha == 1:
-                pr_state.set_migrate_state( '无差异' )
-                singleton.add( pr_state )
+                pr_state.set_migrate_state('无差异')
+                singleton.add(pr_state)
                 continue
             elif gitee_pr == None:
-                pr_state.set_migrate_state( 'fail' )
-                singleton.add( pr_state )
+                pr_state.set_migrate_state('fail')
+                singleton.add(pr_state)
                 break
-            pr_state.set_migrate_state( 'success' )
-            pr_state.set_gitee_pr( gitee_pr )
-            singleton.add( pr_state )
+            pr_state.set_migrate_state('success')
+            pr_state.set_gitee_pr(gitee_pr)
+            singleton.add(pr_state)
             time.sleep(5)
 
 
 @register
 def send_mail_pr_state():
-        print("send pr migration result mail")
-        singleton = MySingleton()
-        content = singleton.to_html()
-        receivers = [ 'xxxx@baidu.com' ]
-        sendMail('Github PR迁移Gitee 状态表格', content, receivers )
+    print("send pr migration result mail")
+    singleton = MySingleton()
+    content = singleton.to_html()
+    receivers = ['xxxx@baidu.com']
+    sendMail('Github PR迁移Gitee 状态表格', content, receivers)
 
 
 githubPrMigrateGitee().main()
