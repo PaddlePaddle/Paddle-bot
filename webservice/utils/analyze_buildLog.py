@@ -45,293 +45,10 @@ def ifAlreadyExist(query_stat):
     return queryTime
 
 
-def analyze_failed_cause(index_dict, target_url):
-    EXCODE = index_dict['EXCODE']
-    filename = '%s_%s_%s.log' % (index_dict['ciName'], index_dict['commitId'],
-                                 index_dict['createTime'])
-    analysis_ci_index = {}
-    analysis_ci_index['PR'] = index_dict['PR']
-    analysis_ci_index['commitId'] = index_dict['commitId']
-    analysis_ci_index['ciName'] = index_dict['ciName']
-    analysis_ci_index['endTime'] = index_dict['endTime']
-    analysis_ci_index['EXCODE'] = EXCODE
-    analysis_ci_index['triggerUser'] = index_dict['triggerUser']
-    analysis_ci_index['targetUrl'] = target_url
-    document_fix = index_dict['documentfix']
-
-    # 过滤commit包含关键字document_fix
-    if document_fix == True:
-        analysis_ci_index['description'] = 'document_fix'
-
-    SkipTestCi = localConfig.cf.get('CIIndexScope', 'Paddle_skip_test_ci')
-    PRECISION_TEST_CI = localConfig.cf.get('CIIndexScope',
-                                           'Paddle_PRECISION_TEST')
-    isSkipTest = 0
-    isSkipDir = 0
-    PRECISION_TEST = None
-    PRECISION_TEST_Cases_count = None
-    PRECISION_TEST_Cases_ratio = None
-    notHitMapFiles = None
-
-    if EXCODE in [0, 4]:  #2代码冲突，6需要approve, 4代码风格不符合
-        isException = 0
-    elif EXCODE == 2:
-        isException = 0
-        analysis_ci_index['description'] = 'code conflict'
-    elif EXCODE == 6:
-        isException = 0
-        analysis_ci_index['description'] = 'pr need to approve'
-    elif EXCODE == 503:
-        isException = 1
-        analysis_ci_index['description'] = 'HTTP PROXY NOT Good'
-    elif EXCODE == 7:
-        query_stat = "SELECT EXCODE,PR,commitId FROM paddle_ci_index WHERE ciName='%s' order by time desc limit 5" % index_dict[
-            'ciName']
-        db = Database()
-        result = list(db.query(query_stat))
-        if len(result) == 0:
-            isException = 0
-        else:
-            last5tasks_buildfailed = [
-                record['EXCODE'] for record in result[0]
-                if record['EXCODE'] == 7
-            ]
-            if len(last5tasks_buildfailed) < 3:
-                isException = 0
-            else:
-                isException = 1
-    elif EXCODE == 8 and index_dict['ciName'] not in ['PR-CI-OP-benchmark'
-                                                      ]:  #单测失败原因
-        isException = 0  # 先默认是PR本身的单测问题
-        testsfailed_list = []
-        WLIST_PR = wlist_alarm.wlist_pr
-        WLIST_UT = wlist_alarm.wlist_ut
-        filename = '%s_%s.log' % (index_dict['ciName'], index_dict['commitId'])
-        shortcommitId = index_dict['commitId'][0:7]
-        f = open('buildLog/%s' % filename, 'r')
-        data = f.read()
-        if index_dict['ciName'].startswith('PR-CI-Py3') or index_dict[
-                'ciName'].startswith('PR-CI-Coverage') or index_dict[
-                    'ciName'].startswith('PR-CI-Mac'):  #Linux
-            testsfailed_strlist = data.split('Summary Failed Tests...', 1)
-            testsfailed = testsfailed_strlist[1].split(
-                'The following tests FAILED:')[1].split('+ EXCODE=')[0]
-        elif index_dict['ciName'].startswith('PR-CI-Windows') and index_dict[
-                'ciName'] != 'PR-CI-Windows-Remain-BuildTest':  #Mac/Windows
-            testsfailed_strlist = data.split('The following tests FAILED:', 1)
-            testsfailed = testsfailed_strlist[1].split(
-                'Errors while running CTest')[0]
-        else:
-            testsfailed_strlist = data.split('Summary Failed Tests...', 1)
-            testsfailed = testsfailed_strlist[1].split(
-                'The following tests FAILED:')[1].split('+ EXCODE=')[0]
-        f.close()
-        with open("buildLog/testsfailed_%s" % filename, "w") as t:
-            t.write(testsfailed)
-            t.close
-        with open("buildLog/testsfailed_%s" % filename) as f:
-            for line in f.readlines():
-                tests = line[19:].strip().split('-')
-                if len(tests) > 1:
-                    tests_single = tests[1].strip()
-                    testsfailed_list.append(tests_single)
-            f.close()
-        os.remove("buildLog/testsfailed_%s" % filename)
-        if len(testsfailed_list) > 20:
-            isException = 0
-            analysis_ci_index['description'] = "PR's uts failed 20+"
-            logger.error("PR's uts failed 20+: %s %s: %s" %
-                         (index_dict['PR'], index_dict['ciName'], target_url))
-        else:
-            today = datetime.date.today()
-            today_10_timestamp = int(
-                time.mktime(time.strptime(str(today),
-                                          '%Y-%m-%d'))) + 60 * 60 * 10
-            if int(time.time()) < today_10_timestamp:
-                yesterday = today - datetime.timedelta(days=1)
-                date = yesterday.strftime('%Y%m%d')
-            else:
-                date = today.strftime('%Y%m%d')
-            failed_cause_file = 'buildLog/failed_cause_%s.csv' % date
-            rerun_failed_cause_file = 'buildLog/rerun_failed_cause_%s.csv' % date
-            if os.path.exists(failed_cause_file) == False:
-                create_failed_cause_csv(failed_cause_file)
-            if os.path.exists(rerun_failed_cause_file) == False:
-                create_failed_cause_csv(rerun_failed_cause_file)
-            for t in testsfailed_list:
-                df = pd.read_csv(failed_cause_file)
-                IFRERUN = False
-                failed_write_file = failed_cause_file
-                for index, row in df.iterrows():
-                    if index_dict['PR'] == row['PR'] and shortcommitId == row[
-                            'COMMITID'] and t == row['FAILED_MESSAGE']:
-                        IFRERUN = True
-                if IFRERUN == True:
-                    df = pd.read_csv(rerun_failed_cause_file)
-                    failed_write_file = rerun_failed_cause_file
-                if t in df['FAILED_MESSAGE'].values:
-                    max_error_count = df[(
-                        df['FAILED_MESSAGE'] == t)].sort_values(
-                            by='ERROR_COUNT',
-                            ascending=False).iloc[0]['ERROR_COUNT']
-                    current_error_count = max_error_count + 1
-                    data = {
-                        'TIME':
-                        time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
-                        'PR': index_dict['PR'],
-                        'COMMITID': shortcommitId,
-                        'CINAME': index_dict['ciName'],
-                        'EXCODE': 8,
-                        'FAILED_MESSAGE': [t],
-                        'ERROR_COUNT': current_error_count,
-                        'CIURL': target_url
-                    }
-                else:
-                    data = {
-                        'TIME':
-                        time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
-                        'PR': index_dict['PR'],
-                        'COMMITID': shortcommitId,
-                        'CINAME': index_dict['ciName'],
-                        'EXCODE': 8,
-                        'FAILED_MESSAGE': [t],
-                        'ERROR_COUNT': 1,
-                        'CIURL': target_url
-                    }
-                logger.info('🌲 IFRERUN: %s data: %s' % (IFRERUN, data))
-                write_data = pd.DataFrame(data)
-                write_data.to_csv(failed_write_file, mode='a', header=False)
-            df = pd.read_csv(failed_cause_file)
-            alarm_ut_list = []
-            alarm_ut_dict = {}
-            for index, row in df.iterrows():
-                if row['ERROR_COUNT'] > 2 and row[
-                        'FAILED_MESSAGE'] not in alarm_ut_list and row[
-                            'FAILED_MESSAGE'] not in WLIST_UT:
-                    alarm_ut_list.append(row['FAILED_MESSAGE'])
-            for ut in alarm_ut_list:
-                alarm_ut_dict[ut] = []
-            for index, row in df.iterrows():
-                if row['FAILED_MESSAGE'] in alarm_ut_list:
-                    alarm_ut_dict[row['FAILED_MESSAGE']].append(
-                        '%s_%s_%s_%s' % (row['PR'], row['COMMITID'],
-                                         row['CINAME'], row['CIURL']))
-            alarm_ut_dict_ult = {}
-            for ut in alarm_ut_dict:
-                if len(alarm_ut_dict[ut]) > 2:
-                    pr_list = []
-                    for i in alarm_ut_dict[ut]:
-                        pr = int(i.split('_')[0])
-                        if pr not in WLIST_PR and pr not in pr_list:
-                            pr_list.append(pr)
-                    if len(pr_list) > 2:
-                        alarm_ut_dict_ult[ut] = alarm_ut_dict[ut]
-            logger.info('alarm_ut_dict_ult : %s' % alarm_ut_dict_ult)
-            if len(alarm_ut_dict_ult) > 0:
-                send_utfailed_mail(alarm_ut_dict_ult)
-                isException = 1  #必挂
-                analysis_ci_index['description'] = "ut failed certainly"
-
-    elif EXCODE == 9:
-        f = open('buildLog/%s' % filename, 'r')
-        data = f.read()
-        covfailed_strlist = data.split('expected >= 90.0 %, actual', 1)
-        covRate = float(covfailed_strlist[1].split('%, failed')[0].strip())
-        analysis_ci_index['covRate'] = covRate
-        analysis_ci_index[
-            'description'] = 'Coverage Rate NOT Reach The Standard'
-        isException = 0
-
-    elif EXCODE == 1:
-        isException = 0  #EXCODE==1时暂定为非异常
-
-    if index_dict['ciName'] in SkipTestCi:
-        f = open('buildLog/%s' % filename, 'r')
-        data = f.read()
-        if 'paddle whl does not diff in PR-CI-Model-benchmark, so skip this ci' in data:
-            isSkipTest = 1
-        if 'ipipe_log_param_isSkipDir_model_benchmark' in data:
-            isSkipDir = 1
-
-    # 获取精准测试监控指标
-    if index_dict['ciName'] in PRECISION_TEST_CI:
-        f = open('buildLog/%s' % filename, 'r')
-        data = f.read()
-        if 'ipipe_log_param_PRECISION_TEST_Cases_count' in data:
-            PRECISION_TEST_Cases_count = data.split(
-                'ipipe_log_param_PRECISION_TEST_Cases_count:', 1)
-            PRECISION_TEST_Cases_count = PRECISION_TEST_Cases_count[1:][
-                0].split('\n')[0].strip()
-        if 'ipipe_log_param_PRECISION_TEST_Cases_ratio' in data:
-            PRECISION_TEST_Cases_ratio = data.split(
-                'ipipe_log_param_PRECISION_TEST_Cases_ratio:', 1)
-            PRECISION_TEST_Cases_ratio = PRECISION_TEST_Cases_ratio[1:][
-                0].split('\n')[0].strip()
-        if 'notHitMapFiles' in data:
-            notHitMapFiles = data.split('notHitMapFiles:', 1)
-            notHitMapFiles = notHitMapFiles[1:][0].split('\n')[0].strip()
-        if 'ipipe_log_param_PRECISION_TEST' in data:
-            PRECISION_TEST = data.split('ipipe_log_param_PRECISION_TEST:', 1)
-            PRECISION_TEST = PRECISION_TEST[1:][0].split('\n')[0].strip()
-            if PRECISION_TEST == 'false':
-                PRECISION_TEST = False
-            elif PRECISION_TEST == 'true':
-                PRECISION_TEST = True
-
-    analysis_ci_index['isException'] = isException
-    analysis_ci_index['isSkipTest'] = isSkipTest
-    analysis_ci_index['isSkipDir'] = isSkipDir
-    analysis_ci_index['PRECISION_TEST'] = PRECISION_TEST
-    analysis_ci_index['PRECISION_TEST_count'] = PRECISION_TEST_Cases_count
-    analysis_ci_index['PRECISION_TEST_ratio'] = PRECISION_TEST_Cases_ratio
-    analysis_ci_index['PRECISION_TEST_notHitMapFiles'] = notHitMapFiles
-    logger.info("EXCODE: %s, isException: %s" % (EXCODE, isException))
-    logger.info("analysis_ci_index: %s" % analysis_ci_index)
-    db = Database()
-    result = db.insert('paddle_ci_analysis', analysis_ci_index)
-    if result == True:
-        logger.info('%s insert paddle_ci_analysis success!' %
-                    analysis_ci_index)
-    else:
-        logger.info('%s insert paddle_ci_analysis failed!' % analysis_ci_index)
-
-
-def send_utfailed_mail(alarm_ut_dict):
-    with open("buildLog/lastestfaileduts.json", 'r') as load_f:
-        try:
-            lastestfaileduts = json.load(load_f)
-        except json.decoder.JSONDecodeError:
-            lastestfaileduts = {}
-    load_f.close()
-    if alarm_ut_dict == lastestfaileduts:
-        logger.info('No new failed task!')
-    else:
-        with open("buildLog/lastestfaileduts.json", "w") as f:
-            json.dump(alarm_ut_dict, f)
-            f.close
-        HTML_CONTENT = "<html> <head></head> <body>  <p>Hi, ALL:</p>  <p>以下单测已经在今天挂在3个不同的PR，请QA同学及时revert或disable该单测，并进行排查。</p><p>ps: 绿色背景的数据是本次新增的失败单测。</p>"
-        TABLE_CONTENT = '<table border="1" align="center"> <caption> <font size="3"><b>单测失败列表</b></font>  </caption> <tbody> <tr align="center"> <td bgcolor="#d0d0d0">单测</td> <td bgcolor="#d0d0d0">PR</td> <td bgcolor="#d0d0d0"> commitID</td> <td bgcolor="#d0d0d0"> CIName</td> <td bgcolor="#d0d0d0">xly_url</td></tr> '
-        for ut in alarm_ut_dict:
-            for l in alarm_ut_dict[ut]:
-                message = l.split('_')
-                pr = message[0]
-                commit = message[1]
-                ciname = message[2]
-                ciurl = message[3]
-                if ut not in lastestfaileduts:
-                    TABLE_CONTENT += '<tr align="center" bgcolor="#b5c4b1"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
-                        ut, pr, commit, ciname, ciurl)
-                else:
-                    if l not in lastestfaileduts[ut]:
-                        TABLE_CONTENT += '<tr align="center" bgcolor="#b5c4b1"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
-                            ut, pr, commit, ciname, ciurl)
-                    else:
-                        TABLE_CONTENT += '<tr align="center"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
-                            ut, pr, commit, ciname, ciurl)
-        HTML_CONTENT = HTML_CONTENT + TABLE_CONTENT + "</tbody> </table> </body></html> "
-        receiver = ['ddd@baidu.com']
-        title = '[告警] CI单测挂了三次以上！'
-        sendMail(receiver, title, HTML_CONTENT)
+def get_stageUrl(target_url):
+    pipelineBuildid = target_url.split('/')[-3]
+    stage_url = localConfig.cf.get('ipipeConf', 'stage_url') + pipelineBuildid
+    return stage_url
 
 
 def sendMail(receiver, title, content):
@@ -342,14 +59,6 @@ def sendMail(receiver, title, content):
     mail.set_title(title)
     mail.set_message(content, messageType='html', encoding='gb2312')
     mail.send()
-
-
-def create_failed_cause_csv(failed_cause_file):
-    df = pd.DataFrame(columns=[
-        'TIME', 'PR', 'COMMITID', 'CINAME', 'EXCODE', 'FAILED_MESSAGE',
-        'ERROR_COUNT', 'CIURL'
-    ])
-    df.to_csv(failed_cause_file)
 
 
 class analysisBuildLog(object):
@@ -370,7 +79,8 @@ class analysisBuildLog(object):
                 ','))
         self.EXCODE_DICT = {
             'docker_build_failed': 64,
-            'clone_code_failed': 65,
+            'clone_code_failed': 63,
+            'temporary_files_failed': 65,
             'build_failed': 7,
             'test_failed': 8,
             'coverage_failed': 9,
@@ -380,6 +90,16 @@ class analysisBuildLog(object):
             'code_conflict': 2,
             'code_too_old': 15
         }
+        self.SkipTestCi_tuple = tuple(
+            localConfig.cf.get('CIIndexScope', 'Paddle_skip_test_ci').split(
+                ','))
+        self.PRECISION_TEST_CI_tuple = tuple(
+            localConfig.cf.get('CIIndexScope', 'Paddle_PRECISION_TEST').split(
+                ','))
+        self.Paddle_testFailed_analysis_ci_tuple = tuple(
+            localConfig.cf.get('CIIndexScope', 'Paddle_testFailed_analysis_ci')
+            .split(','))
+        self.db = Database()
 
     def get_stageUrl(self):
         pipelineBuildid = self.target_url.split('/')[-3]
@@ -720,6 +440,20 @@ class analysisBuildLog(object):
                 basic_ci_index_dict['paddle_build_endTime'] = CIIndex[
                     'paddle_build_endTime']
                 if self.repo not in ['PaddlePaddle/Paddle']:
+                    waitTime_total = (
+                        CIIndex['docker_build_startTime'] - commit_createTime
+                    ) + (CIIndex['paddle_build_startTime'] -
+                         CIIndex['docker_build_endTime']) if CIIndex[
+                             'docker_build_status'] == 'SUCC' else CIIndex[
+                                 'docker_build_startTime'] - commit_createTime
+                    execTime_total = (
+                        CIIndex['paddle_build_endTime'] -
+                        CIIndex['paddle_build_startTime']) + (
+                            CIIndex['docker_build_endTime'] -
+                            CIIndex['docker_build_startTime']) if CIIndex[
+                                'docker_build_status'] == 'SUCC' else CIIndex[
+                                    'docker_build_endTime'] - CIIndex[
+                                        'docker_build_startTime']
                     EXCODE = 0 if CIIndex[
                         'paddle_build_status'] == 'SUCC' else 1
                 else:
@@ -787,7 +521,6 @@ class analysisBuildLog(object):
             basic_ci_index_dict['EXCODE'] = EXCODE
             basic_ci_index_dict['waitTime_total'] = waitTime_total
             basic_ci_index_dict['execTime_total'] = execTime_total
-
             print(basic_ci_index_dict)
             logger.info("basic_ci_index_dict: %s" % basic_ci_index_dict)
             return basic_ci_index_dict
@@ -843,13 +576,10 @@ class analysisBuildLog(object):
             'execTime_total']
         detailed_ci_index_dict['waitTime_total'] = basic_ci_index[
             'waitTime_total']
-        detailed_ci_index_dict['endTime'] = basic_ci_index[
-            'paddle_build_endTime'] if 'paddle_build_endTime' in basic_ci_index else basic_ci_index[
-                'docker_build_endTime']
+        #detailed_ci_index_dict['endTime'] = basic_ci_index['paddle_build_endTime'] if 'paddle_build_endTime' in basic_ci_index else basic_ci_index['docker_build_endTime']
         detailed_ci_index_dict['documentfix'] = basic_ci_index['documentfix']
-
-        analyze_failed_cause(detailed_ci_index_dict,
-                             self.target_url)  #分析PR失败原因
+        self.analyze_failed_cause(basic_ci_index)  #分析PR失败原因
+        #analyze_failed_cause(detailed_ci_index_dict, self.target_url) #分析PR失败原因
         if ciName.startswith(
             ('PR-CI-APPROVAL', 'PR-CI-OP-benchmark',
              'PR-CI-Model-benchmark')) or EXCODE in [1, 2, 7, 64, 503]:
@@ -1039,3 +769,361 @@ class analysisBuildLog(object):
 
             f.close()
         return detailed_ci_index_dict
+
+    def analyze_failed_cause(self, index_dict):
+        analysis_ci_index = {}
+        analysis_ci_index['PR'] = int(index_dict['PR'])
+        analysis_ci_index['commitId'] = index_dict['commitId']
+        analysis_ci_index['ciName'] = index_dict['ciName']
+        analysis_ci_index['commit_createTime'] = index_dict[
+            'commit_createTime']
+        analysis_ci_index['execTime_total'] = index_dict['execTime_total']
+        analysis_ci_index['waitTime_total'] = index_dict['waitTime_total']
+        EXCODE = index_dict['EXCODE']
+        analysis_ci_index['EXCODE'] = EXCODE
+        analysis_ci_index['triggerUser'] = index_dict['triggerUser']
+        analysis_ci_index['targetUrl'] = self.target_url
+        if EXCODE == 0:
+            isException = 0
+            analysis_ci_index['description'] = 'document_fix' if index_dict[
+                'documentfix'] == 'True' else 'success'
+        elif EXCODE == self.EXCODE_DICT['clone_code_failed']:
+            isException = 0
+            analysis_ci_index['description'] = 'clone_code_failed'
+        elif EXCODE == self.EXCODE_DICT['docker_build_failed']:
+            isException = 0
+            analysis_ci_index['description'] = 'docker_build_failed'
+        elif EXCODE == self.EXCODE_DICT['temporary_files_failed']:
+            isException = 0
+            analysis_ci_index['description'] = 'pr has temporary files'
+        elif EXCODE == self.EXCODE_DICT['code_conflict']:
+            isException = 0
+            analysis_ci_index['description'] = 'code conflict'
+        elif EXCODE == self.EXCODE_DICT['code_style_failed']:
+            isException = 0
+            analysis_ci_index['description'] = 'code_style_failed'
+        elif EXCODE == self.EXCODE_DICT['approve_failed']:
+            isException = 0
+            analysis_ci_index['description'] = 'pr need to approve'
+        elif EXCODE == self.EXCODE_DICT['code_too_old']:
+            isException = 0
+            analysis_ci_index['description'] = 'code too old'
+        elif EXCODE == self.EXCODE_DICT['http_proxy_failed']:
+            isException = 1
+            analysis_ci_index['description'] = 'HTTP PROXY NOT Good'
+        elif EXCODE == self.EXCODE_DICT['build_failed']:
+            query_stat = "SELECT EXCODE,PR,commitId FROM paddle_ci_index WHERE ciName='%s' order by time desc limit 5" % index_dict[
+                'ciName']
+            result = list(self.db.query(query_stat))
+            if len(result) == 0:
+                isException = 0
+            else:
+                last5tasks_buildfailed = [
+                    record['EXCODE'] for record in result[0]
+                    if record['EXCODE'] == 7
+                ]
+                if len(last5tasks_buildfailed) < 3:
+                    isException = 0
+                else:
+                    isException = 1
+            if index_dict[
+                    'ciName'].startswith(self.Paddle_cpu_gpu_separate_ci_tuple
+                                         ) and '2' not in index_dict['ciName']:
+                analysis_ci_index['cpu_waitTime'] = (
+                    index_dict['docker_build_startTime'] -
+                    index_dict['clone_code_endTime']) + (
+                        index_dict['clone_code_startTime'] -
+                        index_dict['commit_createTime'])
+            analysis_ci_index['description'] = 'build_failed'
+        elif EXCODE == self.EXCODE_DICT['test_failed'] and index_dict[
+                'ciName'].startswith(
+                    self.Paddle_testFailed_analysis_ci_tuple):  #单测失败原因
+            isException = 0  # 先默认是PR本身的单测问题
+            testsfailed_list = []
+            WLIST_PR = wlist_alarm.wlist_pr
+            WLIST_UT = wlist_alarm.wlist_ut
+            shortcommitId = index_dict['commitId'][0:7]
+            if index_dict['ciName'].startswith(
+                    self.Paddle_cpu_gpu_separate_ci_tuple):
+                filename = '%s_%s_%s_gpu.log' % (
+                    index_dict['ciName'], index_dict['commitId'],
+                    index_dict['commit_createTime'])
+            else:
+                filename = '%s_%s_%s.log' % (index_dict['ciName'],
+                                             index_dict['commitId'],
+                                             index_dict['commit_createTime'])
+            f = open('buildLog/%s' % filename, 'r')
+            data = f.read()
+            if index_dict['ciName'].startswith('PR-CI-Windows') and index_dict[
+                    'ciName'] != 'PR-CI-Windows-Remain-BuildTest':  #Mac/Windows
+                testsfailed_strlist = data.split('The following tests FAILED:',
+                                                 1)
+                testsfailed = testsfailed_strlist[1].split(
+                    'Errors while running CTest')[0]
+            else:
+                testsfailed_strlist = data.split('Summary Failed Tests...', 1)
+                testsfailed = testsfailed_strlist[1].split(
+                    'The following tests FAILED:')[1].split('+ EXCODE=')[0]
+            f.close()
+            with open("buildLog/testsfailed_%s" % filename, "w") as t:
+                t.write(testsfailed)
+                t.close
+            with open("buildLog/testsfailed_%s" % filename) as f:
+                for line in f.readlines():
+                    tests = line[19:].strip().split('-')
+                    if len(tests) > 1:
+                        tests_single = tests[1].strip()
+                        testsfailed_list.append(tests_single)
+                f.close()
+            print(testsfailed_list)
+            os.remove("buildLog/testsfailed_%s" % filename)
+            if len(testsfailed_list) > 20:
+                logger.error("PR's uts failed 20+: %s %s: %s" % (
+                    index_dict['PR'], index_dict['ciName'], target_url))
+                isException = 0
+                analysis_ci_index['description'] = "PR's uts failed 20+"
+            else:
+                today = datetime.date.today()
+                today_10_timestamp = int(
+                    time.mktime(time.strptime(str(today),
+                                              '%Y-%m-%d'))) + 60 * 60 * 10
+                if int(time.time()) < today_10_timestamp:
+                    yesterday = today - datetime.timedelta(days=1)
+                    date = yesterday.strftime('%Y%m%d')
+                else:
+                    date = today.strftime('%Y%m%d')
+                failed_cause_file = 'buildLog/failed_cause_%s.csv' % date
+                rerun_failed_cause_file = 'buildLog/rerun_failed_cause_%s.csv' % date
+                if os.path.exists(failed_cause_file) == False:
+                    self.create_failed_cause_csv(failed_cause_file)
+                if os.path.exists(rerun_failed_cause_file) == False:
+                    self.create_failed_cause_csv(rerun_failed_cause_file)
+                for t in testsfailed_list:
+                    df = pd.read_csv(failed_cause_file)
+                    IFRERUN = False
+                    failed_write_file = failed_cause_file
+                    for index, row in df.iterrows():
+                        if index_dict['PR'] == row[
+                                'PR'] and shortcommitId == row[
+                                    'COMMITID'] and t == row['FAILED_MESSAGE']:
+                            IFRERUN = True
+                    if IFRERUN == True:
+                        df = pd.read_csv(rerun_failed_cause_file)
+                        failed_write_file = rerun_failed_cause_file
+                    if t in df['FAILED_MESSAGE'].values:
+                        max_error_count = df[(
+                            df['FAILED_MESSAGE'] == t)].sort_values(
+                                by='ERROR_COUNT',
+                                ascending=False).iloc[0]['ERROR_COUNT']
+                        current_error_count = max_error_count + 1
+                        data = {
+                            'TIME':
+                            time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
+                            'PR': index_dict['PR'],
+                            'COMMITID': shortcommitId,
+                            'CINAME': index_dict['ciName'],
+                            'EXCODE': 8,
+                            'FAILED_MESSAGE': [t],
+                            'ERROR_COUNT': current_error_count,
+                            'CIURL': target_url
+                        }
+                    else:
+                        data = {
+                            'TIME':
+                            time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
+                            'PR': index_dict['PR'],
+                            'COMMITID': shortcommitId,
+                            'CINAME': index_dict['ciName'],
+                            'EXCODE': 8,
+                            'FAILED_MESSAGE': [t],
+                            'ERROR_COUNT': 1,
+                            'CIURL': target_url
+                        }
+                    logger.info('🌲 IFRERUN: %s data: %s' % (IFRERUN, data))
+                    write_data = pd.DataFrame(data)
+                    write_data.to_csv(
+                        failed_write_file, mode='a', header=False)
+                df = pd.read_csv(failed_cause_file)
+                alarm_ut_list = []
+                alarm_ut_dict = {}
+                for index, row in df.iterrows():
+                    if row['ERROR_COUNT'] > 2 and row[
+                            'FAILED_MESSAGE'] not in alarm_ut_list and row[
+                                'FAILED_MESSAGE'] not in WLIST_UT:
+                        alarm_ut_list.append(row['FAILED_MESSAGE'])
+                for ut in alarm_ut_list:
+                    alarm_ut_dict[ut] = []
+                for index, row in df.iterrows():
+                    if row['FAILED_MESSAGE'] in alarm_ut_list:
+                        alarm_ut_dict[row['FAILED_MESSAGE']].append(
+                            '%s_%s_%s_%s' % (row['PR'], row['COMMITID'],
+                                             row['CINAME'], row['CIURL']))
+                alarm_ut_dict_ult = {}
+                for ut in alarm_ut_dict:
+                    if len(alarm_ut_dict[ut]) > 2:
+                        pr_list = []
+                        for i in alarm_ut_dict[ut]:
+                            pr = int(i.split('_')[0])
+                            if pr not in WLIST_PR and pr not in pr_list:
+                                pr_list.append(pr)
+                        if len(pr_list) > 2:
+                            alarm_ut_dict_ult[ut] = alarm_ut_dict[ut]
+                logger.info('alarm_ut_dict_ult : %s' % alarm_ut_dict_ult)
+                if len(alarm_ut_dict_ult) > 0:
+                    self.send_utfailed_mail(alarm_ut_dict_ult)
+                    isException = 1  #必挂
+                    analysis_ci_index['description'] = "ut failed certainly"
+        elif EXCODE == self.EXCODE_DICT['coverage_failed']:
+            if index_dict['ciName'].startswith(
+                    self.Paddle_cpu_gpu_separate_ci_tuple):
+                filename = '%s_%s_%s_gpu.log' % (
+                    index_dict['ciName'], index_dict['commitId'],
+                    index_dict['commit_createTime'])
+            else:
+                filename = '%s_%s_%s.log' % (index_dict['ciName'],
+                                             index_dict['commitId'],
+                                             index_dict['commit_createTime'])
+            f = open('buildLog/%s' % filename, 'r')
+            data = f.read()
+            covfailed_strlist = data.split('expected >= 90.0 %, actual', 1)
+            covRate = float(covfailed_strlist[1].split('%, failed')[0].strip())
+            analysis_ci_index['covRate'] = covRate
+            analysis_ci_index[
+                'description'] = 'Coverage Rate NOT Reach The Standard'
+            isException = 0
+        else:
+            isException = 0  #EXCODE==1时暂定为非异常
+            analysis_ci_index['description'] = 'unkown failed'
+            logger.info("unkown failed: %s" % analysis_ci_index)
+
+        analysis_ci_index['isException'] = isException
+        if index_dict['ciName'].startswith(self.SkipTestCi_tuple):
+            isSkipTest = 0
+            isSkipDir = 0
+            filename = '%s_%s_%s.log' % (index_dict['ciName'],
+                                         index_dict['commitId'],
+                                         index_dict['commit_createTime'])
+            f = open('buildLog/%s' % filename, 'r')
+            data = f.read()
+            if 'paddle whl does not diff in PR-CI-Model-benchmark, so skip this ci' in data:
+                isSkipTest = 1
+            if 'The modified files does not affect models in PR-CI-Model-benchmark, so skip this ci.' in data:
+                isSkipDir = 1
+            analysis_ci_index['isSkipTest'] = isSkipTest
+            analysis_ci_index['isSkipDir'] = isSkipDir
+        # 获取精准测试监控指标
+        if index_dict['ciName'].startswith(
+                self.PRECISION_TEST_CI_tuple) and EXCODE not in [
+                    self.EXCODE_DICT['clone_code_failed'],
+                    self.EXCODE_DICT['docker_build_failed'],
+                    self.EXCODE_DICT['build_failed'],
+                    self.EXCODE_DICT['http_proxy_failed'],
+                    self.EXCODE_DICT['code_conflict'],
+                    self.EXCODE_DICT['code_too_old']
+                ]:
+            PRECISION_TEST = None
+            PRECISION_TEST_Cases_count = None
+            PRECISION_TEST_Cases_ratio = None
+            notHitMapFiles = None
+            filterFiles = None
+            hitMapFiles = None
+            if index_dict['ciName'].startswith(
+                    self.Paddle_cpu_gpu_separate_ci_tuple):
+                filename = '%s_%s_%s_gpu.log' % (
+                    index_dict['ciName'], index_dict['commitId'],
+                    index_dict['commit_createTime'])
+            else:
+                filename = '%s_%s_%s.log' % (index_dict['ciName'],
+                                             index_dict['commitId'],
+                                             index_dict['commit_createTime'])
+            f = open('buildLog/%s' % filename, 'r')
+            data = f.read()
+            if 'ipipe_log_param_PRECISION_TEST_Cases_count' in data:
+                PRECISION_TEST_Cases_count = data.split(
+                    'ipipe_log_param_PRECISION_TEST_Cases_count:', 1)
+                PRECISION_TEST_Cases_count = int(PRECISION_TEST_Cases_count[1:]
+                                                 [0].split('\n')[0].strip())
+            if 'ipipe_log_param_PRECISION_TEST_Cases_ratio' in data:
+                PRECISION_TEST_Cases_ratio = data.split(
+                    'ipipe_log_param_PRECISION_TEST_Cases_ratio:', 1)
+                PRECISION_TEST_Cases_ratio = round(
+                    float(PRECISION_TEST_Cases_ratio[1:][0].split('\n')[0]
+                          .strip()), 2)
+            if 'notHitMapFiles' in data:
+                notHitMapFiles = data.split('notHitMapFiles:', 1)
+                notHitMapFiles = notHitMapFiles[1:][0].split('\n')[0].strip()
+            if 'ipipe_log_param_PRECISION_TEST' in data:
+                PRECISION_TEST = data.split('ipipe_log_param_PRECISION_TEST:',
+                                            1)
+                PRECISION_TEST = PRECISION_TEST[1:][0].split('\n')[0].strip()
+            if 'filterFiles:' in data:
+                filterFiles = data.split('filterFiles:', 1)
+                filterFiles = filterFiles[1:][0].split('\n')[0].strip()
+            if 'hitMapFiles:' in data:
+                hitMapFiles = data.split('hitMapFiles:', 1)
+                hitMapFiles = hitMapFiles[1:][0].split('\n')[0].strip()
+            analysis_ci_index['PRECISION_TEST'] = PRECISION_TEST
+            analysis_ci_index[
+                'PRECISION_TEST_count'] = PRECISION_TEST_Cases_count
+            analysis_ci_index[
+                'PRECISION_TEST_ratio'] = PRECISION_TEST_Cases_ratio
+            analysis_ci_index['PRECISION_TEST_notHitMapFiles'] = notHitMapFiles
+            analysis_ci_index['PRECISION_TEST_hitMapFiles'] = hitMapFiles
+            analysis_ci_index['PRECISION_TEST_filterFiles'] = filterFiles
+
+        print(analysis_ci_index)
+        result = self.db.insert('paddle_ci_analysis', analysis_ci_index)
+        if result == True:
+            logger.info('%s insert paddle_ci_analysis success!' %
+                        analysis_ci_index)
+        else:
+            logger.info('%s insert paddle_ci_analysis failed!' %
+                        analysis_ci_index)
+
+    def create_failed_cause_csv(self, failed_cause_file):
+        df = pd.DataFrame(columns=[
+            'TIME', 'PR', 'COMMITID', 'CINAME', 'EXCODE', 'FAILED_MESSAGE',
+            'ERROR_COUNT', 'CIURL'
+        ])
+        df.to_csv(failed_cause_file)
+
+    def send_utfailed_mail(self, alarm_ut_dict):
+        with open("buildLog/lastestfaileduts.json", 'r') as load_f:
+            try:
+                lastestfaileduts = json.load(load_f)
+            except json.decoder.JSONDecodeError:
+                lastestfaileduts = {}
+        load_f.close()
+        if alarm_ut_dict == lastestfaileduts:
+            logger.info('No new failed task!')
+        else:
+            with open("buildLog/lastestfaileduts.json", "w") as f:
+                json.dump(alarm_ut_dict, f)
+                f.close
+            HTML_CONTENT = "<html> <head></head> <body>  <p>Hi, ALL:</p>  <p>以下单测已经在今天挂在3个不同的PR，请QA同学及时revert或disable该单测，并进行排查。</p><p>ps: 绿色背景的数据是本次新增的失败单测。</p>"
+            TABLE_CONTENT = '<table border="1" align="center"> <caption> <font size="3"><b>单测失败列表</b></font>  </caption> <tbody> <tr align="center"> <td bgcolor="#d0d0d0">单测</td> <td bgcolor="#d0d0d0">PR</td> <td bgcolor="#d0d0d0"> commitID</td> <td bgcolor="#d0d0d0"> CIName</td> <td bgcolor="#d0d0d0">xly_url</td></tr> '
+            for ut in alarm_ut_dict:
+                for l in alarm_ut_dict[ut]:
+                    message = l.split('_')
+                    pr = message[0]
+                    commit = message[1]
+                    ciname = message[2]
+                    ciurl = message[3]
+                    if ut not in lastestfaileduts:
+                        TABLE_CONTENT += '<tr align="center" bgcolor="#b5c4b1"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
+                            ut, pr, commit, ciname, ciurl)
+                    else:
+                        if l not in lastestfaileduts[ut]:
+                            TABLE_CONTENT += '<tr align="center" bgcolor="#b5c4b1"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
+                                ut, pr, commit, ciname, ciurl)
+                        else:
+                            TABLE_CONTENT += '<tr align="center"><td> %s</td><td> %s</td><td> %s</td><td> %s</td><td> %s</td></tr>' % (
+                                ut, pr, commit, ciname, ciurl)
+            HTML_CONTENT = HTML_CONTENT + TABLE_CONTENT + "</tbody> </table> </body></html> "
+            receiver = [
+                'zhangchunle@baidu.com', 'tianshuo03@baidu.com',
+                'v_duchun@baidu.com', 'xieyunshen@baidu.com',
+                'liuxudong04@baidu.com', 'luotao02@baidu.com'
+            ]
+            title = '[告警] CI单测挂了三次以上！'
+            sendMail(receiver, title, HTML_CONTENT)
