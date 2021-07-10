@@ -6,6 +6,8 @@ import time
 import datetime
 from gitee.handler import GiteePROperation
 from gitee.pr_merge import gitee_merge_pr, sendMail
+from Singleton import MySingleton
+from pr_merge import sendMail
 
 logging.basicConfig(
     level=logging.INFO,
@@ -263,8 +265,10 @@ class githubPrMigrateGitee():
         commitId_github = self.githubPaddle.getPRMergeCommit(GithubPR)
         CommitList_github = self.githubPaddle.getCommitList(commitId_github,
                                                             beforeTime)
+        singleton = MySingleton()
         for commitId in CommitList_github[::-1]:
             changeFiles, PR = self.githubPaddle.getPRchangeFiles(commitId)
+            singleton.new_pr( PR )
             ifconflict = self.ifPRconflict(changeFiles)
             if ifconflict == True:
                 gitee_merge_pr()
@@ -287,12 +291,17 @@ class githubPrMigrateGitee():
             os.system(
                 'bash /home/zhangchunle/Paddle-bot/gitee/update_code.sh prepareCode %s %s mirgate_%s'
                 % (commitId, branch, PR))
-            PR, sha = self.giteePaddle.create_pr(branch, title, body)
-            if PR == 1 and sha == 1:
+            flag, sha = self.giteePaddle.create_pr(branch, title, body)
+            if flag == 1 and sha == 1:
+                singleton.set_pr_migrate_state( PR, 'success' )
                 continue
-            elif PR == None:
+            elif flag == None:
+                singleton.set_pr_migrate_state( PR, 'fail' )
                 break
             time.sleep(5)
+        content = singleton.to_html()
+        receivers = [ 'xxxx@baidu.com' ]
+        sendMail('Github PR迁移Gitee状态表格', content, receivers )
 
 
 githubPrMigrateGitee().main()
