@@ -4,7 +4,7 @@ import sys
 import re
 import os
 
-sys.path.append("/home/v_duchun/Paddle-bot/webservice")
+sys.path.append("xxxxx")
 from utils.db import Database
 from utils import bosclient
 
@@ -12,6 +12,7 @@ from utils import bosclient
 def GetCommits(headers, PR):
     commits_list = []
     url = 'https://api.github.com/repos/PaddlePaddle/Paddle/pulls/%s/commits' % PR
+    print(url)
     response = requests.get(url, headers=headers).json()
     for commit in response:
         sha = commit['sha']
@@ -30,10 +31,11 @@ def Info(sha):
     return False
 
 
-def Save(sha, data, dir_name):
+def Save(data, dir_name):
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
-    with open(dir_name + sha, "w+", encoding='utf-8') as f:
+    with open(
+            dir_name + "fluidInference_so_size", "w+", encoding='utf-8') as f:
         f.write(str(data))
 
 
@@ -43,15 +45,12 @@ if __name__ == '__main__':
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--PR', help='the day of dates.', default=None)
     args = parser.parse_args()
-    headers = {
-        'authorization': "token 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"
-    }
+    headers = {'authorization': "xxxxx"}
+
     if args.PR:
         commits_list = GetCommits(headers, args.PR)
         for sha in commits_list:
             data = Info(sha)
             if data:
-                Save(sha, data,
-                     '/home/v_duchun/Paddle-bot/webservice/buildLog/%s/' %
-                     args.PR)
-    bosclient.uploading(args.PR, sha)
+                Save(data, "path_name")
+    bosclient.uploading("fluidInference_so_size")
