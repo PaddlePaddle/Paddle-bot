@@ -43,12 +43,15 @@ if __name__ == '__main__':
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--PR', help='the day of dates.', default=None)
     args = parser.parse_args()
-    headers = {'authorization': "token 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"}
+    headers = {
+        'authorization': "token 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"
+    }
     if args.PR:
         commits_list = GetCommits(headers, args.PR)
         for sha in commits_list:
             data = Info(sha)
             if data:
-                Save(sha, data, '/home/v_duchun/Paddle-bot/webservice/buildLog/%s/' % args.PR)
+                Save(sha, data,
+                     '/home/v_duchun/Paddle-bot/webservice/buildLog/%s/' %
+                     args.PR)
     bosclient.uploading(args.PR, sha)
-                
