@@ -1,6 +1,4 @@
 import requests
-import datetime
-import argparse
 import sys
 import re
 import os
@@ -8,17 +6,6 @@ import os
 sys.path.append("xx")
 from utils.db import Database
 from utils import bosclient
-
-
-def toBJtime(Time):
-    """
-    utc时间转换北京时间
-    """
-    Time = Time.replace('T', ' ').replace('Z', '')
-    Time = datetime.datetime.strptime(Time, '%Y-%m-%d %H:%M:%S')
-    Time = Time + datetime.timedelta(hours=8)
-    Time = datetime.datetime.strftime(Time, '%Y-%m-%d %H:%M')
-    return Time
 
 
 def PageNum(headers):
