@@ -752,12 +752,10 @@ class analysisBuildLog(object):
                 testCaseTime_win = int(testCaseTime_win_strlist[1:][0].split(
                     's')[0].strip())
                 detailed_ci_index_dict['testCaseTime_total'] = testCaseTime_win
-                if ciName in ['PR-CI-Windows', 'PR-CI-Windows-OPENBLAS']:
-                    buildCache_strlist = data.split(
-                        'ipipe_log_param_Windows_Build_Cache: ', 2)
-                    buildCache = 1 if buildCache_strlist[1:][0].split('\n')[
-                        0].strip() == 'TRUE' else 0
-                    detailed_ci_index_dict['buildCache'] = int(buildCache)
+                if ciName in ['PR-CI-Windows']:
+                    ccacheRate_strlist = data.split('ipipe_log_param_sccache_Hit_Hate:', 1)
+                    ccacheRate = ccacheRate_strlist[1:][0].split('%')[0].strip()
+                    detailed_ci_index_dict['ccacheRate'] = float(ccacheRate)
                 print(detailed_ci_index_dict)
                 '''
                 testCaseCount_single_strlist = data.split('Windows 1 card TestCases count is')

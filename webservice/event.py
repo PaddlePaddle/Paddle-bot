@@ -232,7 +232,7 @@ async def get_ci_index(event, gh, repo, *args, **kwargs):
             state = event.data['state']
             commitId = event.data['sha']
             ciName = event.data['context']
-            triggerUser = event.data['commit']['committer']['login']
+            triggerUser = event.data['commit']['commit']['committer']['name']
             basic_ci_index_dict['ciName'] = ciName
             basic_ci_index_dict['commitId'] = commitId
             basic_ci_index_dict['status'] = state
