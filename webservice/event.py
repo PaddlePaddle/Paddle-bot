@@ -320,7 +320,7 @@ async def get_ci_index(event, gh, repo, *args, **kwargs):
 @router.register("status")
 async def check_ci_failure(event, gh, repo, *args, **kwargs):
     """check commits whether passed all CI or contain failed CI"""
-    if repo in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark']:
+    if repo in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark', 'PaddlePaddle/Paddle-bot']:
         state = event.data['state']
         context = event.data['context']
         commit_url = event.data["commit"]["url"]
