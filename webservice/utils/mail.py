@@ -1,3 +1,5 @@
+#!/bin/env python
+# encoding: utf-8
 import smtplib
 from email.header import Header
 from email.mime.multipart import MIMEMultipart
@@ -8,24 +10,24 @@ import socket
 import traceback
 import time
 
-
 class Mail:
     def __init__(self):
         try:
-            self.sender = 'xxxxx@163.com'
-            self.receivers = ['xxxxx@163.com']
+            self.sender = 'clzhang_cauc@163.com'
+            self.receivers = ['clzhang_cauc@163.com']
             self.subject = 'Default Title'
             self.body = MIMEText('Default Body')
         except:
             print(traceback.format_exc())
 
-    def set_sender(self, sender='xxxxx@163.com'):
+    def set_sender(self, sender='clzhang_cauc@163.com'):
         try:
             self.sender = sender
         except:
             print(traceback.format_exc())
 
-    def set_receivers(self, receivers=['xxxxx@163.com']):
+
+    def set_receivers(self, receivers=['clzhang_cauc@163.com']):
         try:
             assert isinstance(receivers, list)
             self.receivers = list(set(receivers))
@@ -38,15 +40,13 @@ class Mail:
         except:
             print(traceback.format_exc())
 
-    def set_message(self,
-                    message='Default Message',
-                    messageType='plain',
-                    encoding='gb2312'):
+    def set_message(self, message='Default Message', messageType='plain', encoding='gb2312'):
         try:
             self.body = MIMEText(message, messageType, encoding)
         except:
             print(traceback.format_exc())
 
+    
     def send(self):
         try:
             mail = MIMEMultipart('mail')
@@ -55,7 +55,7 @@ class Mail:
             mail['To'] = strTo
             mail['Subject'] = self.subject
             mail.attach(self.body)
-            session = smtplib.SMTP('xxxx.163.com', timeout=10)
+            session = smtplib.SMTP('proxy-in.baidu.com', timeout=10)
             remover = "xxxx@qq.com"
             if remover in self.receivers:
                 self.receivers.remove(remover)
@@ -63,3 +63,13 @@ class Mail:
             session.close()
         except:
             print(traceback.format_exc())
+
+if __name__ == "__main__":
+    mail = Mail()
+    i = 0
+    while i < 2:
+        i = i + 1
+        mail.set_title(" Title ")
+        mail.set_message(" nihao ya")
+        mail.send()
+        time.sleep(5)

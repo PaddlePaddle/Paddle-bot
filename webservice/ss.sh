@@ -1,0 +1,1 @@
+cd /home/zhangchunle/Paddle-bot/webservice/buildLog;rm -f todayDuty.log*; wget https://paddle-docker-tar.cdn.bcebos.com/buildLog/todayDuty-`date +%Y-%m-%d`.logs

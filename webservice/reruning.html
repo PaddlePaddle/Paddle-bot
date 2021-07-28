@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Paddle rerun CI</title>
+    <meta name="viewport" charset="utf8" content="width=device-width, initial-scale=1.0">
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <script type="text/javascript">
+        var time = 5;
+        var timer = setInterval(function () {
+            if (time >= 1) {
+                time--;
+            } else {
+                clearInterval(timer);
+                window.history.go(-1);
+            }
+        }, 1000)
+    </script>
+    <style type="text/css">
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        div {
+            width: 600px;
+            height: 200px;
+            {#background-color: #1E90FF;#}
+        }
+
+        .center-in-center {
+            position: absolute;
+            top: 41%;
+            left: 57%;
+            -webkit-transform: translate(-50%, -50%);
+            -moz-transform: translate(-50%, -50%);
+            -ms-transform: translate(-50%, -50%);
+            -o-transform: translate(-50%, -50%);
+            transform: translate(-50%, -50%);
+        }
+
+        .text {
+            width: 50%;
+            height: 50%;
+            line-height: 100px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="center-in-center">
+    <h2>Sorry, this feature is temporarily offline. </h2>
+</div>
+###Hello, we are helping you rerun all CIs, please wait...
+<script src="https://code.jquery.com/jquery.js"></script>
+<script src="js/bootstrap.min.js"></script>
+</body>
+</html>
+
