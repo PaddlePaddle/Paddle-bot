@@ -1,0 +1,43 @@
+Traceback (most recent call last):
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/site-packages/urllib3/response.py", line 696, in _update_chunk_length
+    self.chunk_left = int(line, 16)
+ValueError: invalid literal for int() with base 16: b''
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/site-packages/urllib3/response.py", line 436, in _error_catcher
+    yield
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/site-packages/urllib3/response.py", line 763, in read_chunked
+    self._update_chunk_length()
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/site-packages/urllib3/response.py", line 700, in _update_chunk_length
+    raise httplib.IncompleteRead(line)
+http.client.IncompleteRead: IncompleteRead(0 bytes read)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/site-packages/requests/models.py", line 751, in generate
+    for chunk in self.raw.stream(chunk_size, decode_content=True):
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/site-packages/urllib3/response.py", line 571, in stream
+    for line in self.read_chunked(amt, decode_content=decode_content):
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/site-packages/urllib3/response.py", line 792, in read_chunked
+    self._original_response.close()
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/contextlib.py", line 131, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/site-packages/urllib3/response.py", line 454, in _error_catcher
+    raise ProtocolError("Connection broken: %r" % e, e)
+urllib3.exceptions.ProtocolError: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "utils/getXlybuildRecord.py", line 55, in <module>
+    basic_ci_index_dict = getBasicCIIndex('PaddlePaddle/Paddle', sha, document_fix, target_url)
+  File "/home/zhangchunle/Paddle-bot/webservice/utils/analyze_buildLog_bak.py", line 146, in getBasicCIIndex
+    getIpipeBuildLog(sha, res['pipelineConfName'], commit_createTime, logUrl)
+  File "/home/zhangchunle/Paddle-bot/webservice/utils/analyze_buildLog_bak.py", line 331, in getIpipeBuildLog
+    for chunk in r.iter_content(chunk_size = 1024):
+  File "/home/zhangchunle/anaconda2/envs/bot/lib/python3.8/site-packages/requests/models.py", line 754, in generate
+    raise ChunkedEncodingError(e)
+requests.exceptions.ChunkedEncodingError: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))

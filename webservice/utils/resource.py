@@ -2,7 +2,6 @@ import sys
 sys.path.append("..")
 from utils.handler import xlyHandler
 
-
 class Resource(xlyHandler):
     def getEachResource(self):
         """
@@ -17,6 +16,7 @@ class Resource(xlyHandler):
             agent_details = self.getConcurrenceByResourceId(label['id']).json()
             executorCount = self.getAgentExecutorCount(agent_details)
             resource_dict[agent_name] = executorCount
+        print(resource_dict)
         return resource_dict
 
     def getAgentExecutorCount(self, res):
@@ -31,3 +31,5 @@ class Resource(xlyHandler):
             if agent['status'] == 'ONLINE':
                 executorCount += agent['executorCount']
         return executorCount
+
+#Resource().getEachResource()

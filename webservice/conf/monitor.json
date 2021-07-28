@@ -1,8 +1,10 @@
 {
-    "PaddlePaddle/Paddle": ["PR-CI-Coverage", "PR-CI-Py3", "PR-CI-CPU-Py2", "PR-CI-Inference", "PR-CI-Mac", "PR-CI-Mac-Python3", "PR-CI-Windows-OPENBLAS", "PR-CI-Windows", "PR-CI-APPROVAL"],
+    "PaddlePaddle/Paddle": ["PR-CI-Coverage", "PR-CI-Py3", "PR-CI-OP-benchmark", "PR-CI-CPU-Py2", "PR-CI-Inference", "PR-CI-Mac", "PR-CI-Mac-Python3", "PR-CI-Windows-OPENBLAS", "PR-CI-Windows", "PR-CI-APPROVAL", "PR-CI-musl", "PR-CI-Kunlun"],
     "PaddlePaddle/benchmark": ["PR-CI-OP-Benchmark", "PR-CI-APPROVAL"],
     "PaddlePaddle/FluidDoc": ["FluidDoc1"],
     "PaddlePaddle/PaddleRec": ["xly-PR-CI-PY27", "xly-PR-CI-PY35"],
     "PaddlePaddle/CINN": ["cinn-ci"],
-    "PaddlePaddle/Serving": ["xly-PR-CI-PY2", "xly-PR-CI-PY3",  "PR-CI-CUDA9-CUDNN7"]
+    "PaddlePaddle/Serving": ["xly-PR-CI-PY2", "xly-PR-CI-PY3",  "PR-CI-CUDA9-CUDNN7", "PaddleServing文档测试"],
+    "PaddlePaddle/FleetX": ["xly-PR-CI-PY27", "xly-PR-CI-PY37"],
+    "PaddlePaddle/PaddleHelix": []
 }

@@ -28,6 +28,15 @@ function GiteePaddle_env() {
     fetch_upstream_develop_if_not_exist 'https://gitee.com/paddlepaddle/Paddle'
 }
 
+function GiteePaddle_env_update() {
+    TARGET_PATH=${ROOT_PATH}/gitee_Paddle
+    BRANCH='develop'
+    cd ${TARGET_PATH}
+    git checkout ${BRANCH}
+    git fetch upstream
+    git pull upstream $BRANCH
+}
+
 
 function fetch_upstream_develop_if_not_exist() {
     UPSTREAM_URL=$1
@@ -97,6 +106,9 @@ function main() {
             ;;
         prepareCode)
             createPR $newbranch $title
+            ;;
+        giteePaddle_env_update)
+            GiteePaddle_env_update
             ;;
             *)
             echo "Sorry, $CMD not recognized."

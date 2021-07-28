@@ -1,0 +1,47 @@
+{
+	'id': 5980154, 
+	'jobName': '执行脚本插件', 
+	'jobConfId': 22313, 
+	'stageBuildId': 4675051, 
+	'jobType': 'SHELL', 
+	'status': 'FAIL', 
+	'startTime': 1627025479000, 
+	'endTime': 1627025490000, 
+	'duration': '11s', 
+	'realJobBuildId': 1295673, 
+	'realJobBuild': 
+		{
+			'shellBuild': 
+			{
+				'id': 1295673, 
+				'shellConfId': 3342, 
+				'resourceId': '239', 
+				'type': 'POOL', 
+				'command': '#!/bin/bash\nset -ex\ncd /home\n\nif [ -d Paddle-bot ]; then rm -rf Paddle-bot; fi \ngit config --global user.name "Paddle CI_MAC"\ngit config --global user.email "paddle_ci@example.com"\ngit clone https://github.com/PaddlePaddle/Paddle-bot.git\ncd Paddle-bot\nset +e\ngit remote | grep upstream\nif [ $? != 0 ]; then git remote add upstream https://github.com/PaddlePaddle/Paddle-bot.git; fi\nset -e\ngit fetch origin pull/$AGILE_PULL_ID/head\ngit checkout -b test FETCH_HEAD\n\ngit fetch upstream\ngit merge --no-edit ${BRANCH}\ngit log --pretty=oneline -10\n\nset +e\nbash scripts/check_code.sh check_code_style;EXCODE=$?\necho "EXCODE: $EXCODE"\n\nexit $EXCODE', 
+				'cibcModule': '', 
+				'cibcFunction': '', 
+				'cibcStage': '', 
+				'taskId': '8029afc6-b085-4958-a011-3b2657180495', 
+				'buildStatus': 'FAIL', 
+				'createTime': 1627025478000, 
+				'startTime': 1627025481000, 
+				'endTime': 1627025490000, 
+				'dbSkipStatus': 0, 
+				'retainWorkspaceCondition': 'JOB_FAIL', 
+				'scriptType': 'SH', 
+				'wsDirType': 'JOB_UUID', 
+				'wsParentDir': '', 
+				'wsDir': '', 
+				'killDescendant': False, 
+				'relativeWsDir': ''
+			}, 
+		'coverage': None, 
+		'reports': [], 
+		'shellArtifactBuilds': None}, 
+		'upstreamJobBuildId': 0, 
+		'message': 'weqef', 
+		'visible': True, 
+		'mark': True, 
+		'markUser': 'v_duchun', 
+		'timeoutCancel': False
+}
