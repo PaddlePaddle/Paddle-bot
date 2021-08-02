@@ -23,9 +23,7 @@ class GithubRepo(object):
     def __init__(self):
         self.commitUrl = 'https://api.github.com/repos/{owner}/{repo}/commits'
         self.prUrl = 'https://api.github.com/repos/{owner}/{repo}/pulls'
-        self.headers = {
-            'authorization': "token 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"
-        }
+        self.headers = {'authorization': "token xxxx"}
 
     def utcTimeToStrTime(self, utcTime):
         """utc时间转换为当地时间"""
@@ -110,9 +108,7 @@ class giteeRepo():
         # self.githubPaddlePath = '/home/zhangchunle/Paddle-bot/gitee/Paddle'
         self.giteePaddlePath = '/home/jiangxinzhou01/test/Paddle-bot/gitee/gitee_Paddle'
         self.githubPaddlePath = '/home/jiangxinzhou01/test/Paddle-bot/gitee/Paddle'
-        self.headers = {
-            'authorization': 'token 04388373ac19b581f4d2e8238131b20a'
-        }
+        self.headers = {'authorization': 'token xxxx'}
         self.operation = GiteePROperation()
 
     def getlastestPR(self):
@@ -175,7 +171,7 @@ class giteeRepo():
         return PR, commitId
         """
         prUrl = self.prUrl.format(owner='paddlepaddle', repo='Paddle')
-        payload = {"access_token": "04388373ac19b581f4d2e8238131b20a"}
+        payload = {"access_token": "xxxx"}
         data = {
             "title": "%s" % title,
             "head": "PaddlePaddle-Gardener:%s" % branch,
@@ -225,9 +221,7 @@ class giteeRepo():
                 return PR, sha
             else:
                 title = '[告警]Gitee提交PR失败'
-                receivers = [
-                    'zhangchunle@baidu.com', 'jiangxinzhou01@baidu.com'
-                ]
+                receivers = ['xxxx@baidu.com', 'xxxx@baidu.com']
                 mail_content = 'PR: %s, data: %s, %s' % (prUrl, data,
                                                          response.text)
                 sendMail(title, mail_content, receivers)
@@ -343,7 +337,7 @@ def send_mail_pr_state():
     pr_migrate_info = singleton.to_html()
     mail_content = mail_content + "<tr align=center><td bgcolor='#d0d0d0'>类型</td><td bgcolor='#d0d0d0'>PR/Issue号</td><td bgcolor='#d0d0d0'>状态</td></tr>" + pr_migrate_info + "<p>如有疑问，请@张春乐。谢谢</p>" + "</body></html>"
     print(mail_content)
-    receivers = ['zhangchunle@baidu.com', 'jiangxinzhou01@baidu.com']
+    receivers = ['xxx@baidu.com', 'xxxx@baidu.com']
     sendMail('Github PR迁移Gitee 状态表格', mail_content, receivers)
 
 
