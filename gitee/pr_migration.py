@@ -1,5 +1,3 @@
-import sys
-sys.path.append('/home/jiangxinzhou01/test/Paddle-bot')
 import requests
 import os
 import json

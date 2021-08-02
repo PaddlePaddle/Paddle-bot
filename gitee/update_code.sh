@@ -78,8 +78,6 @@ function createPR() {
     cd ${TARGET_PATH}
     git add .
     git commit -m $commitMessage
-    git add .
-    git commit -m $commitMessage
     git push -f origin $newBranch
     push_res=$?
     while [ $push_res -ne 0 ]

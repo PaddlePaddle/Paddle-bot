@@ -1,5 +1,3 @@
-# import sys
-# sys.path.append("/home/jiangxinzhou01/test/Paddle-bot/")
 from gitee.handler import GiteePROperation
 
 import json
