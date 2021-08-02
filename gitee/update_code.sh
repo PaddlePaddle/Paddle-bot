@@ -20,14 +20,25 @@ function GithubPaddle_env() {
 function GiteePaddle_env() {
     rm -rf ${ROOT_PATH}/gitee_Paddle
     cd ${ROOT_PATH}
-    git clone https://gitee.com/paddlepaddle-gardener/Paddle.git gitee_Paddle
+    /usr/local/git/bin/git clone https://gitee.com/paddlepaddle-gardener/Paddle.git gitee_Paddle
     TARGET_PATH=${ROOT_PATH}/gitee_Paddle
     BRANCH='develop'
     cd ${TARGET_PATH}
-    git checkout $BRANCH
+    /usr/local/git/bin/git checkout $BRANCH
     fetch_upstream_develop_if_not_exist 'https://gitee.com/paddlepaddle/Paddle'
 }
 
+function GiteePaddle_env_update() {
+    echo '********************cesar************************'
+    TARGET_PATH=${ROOT_PATH}/gitee_Paddle
+    BRANCH='develop'
+    cd ${TARGET_PATH}
+    git checkout ${BRANCH}
+    git fetch upstream
+    git pull upstream $BRANCH
+    # fetch_upstream_develop_if_not_exist 'https://gitee.com/paddlepaddle/Paddle'
+    echo '********************cesar************************'
+}
 
 function fetch_upstream_develop_if_not_exist() {
     UPSTREAM_URL=$1
@@ -67,6 +78,8 @@ function createPR() {
     cd ${TARGET_PATH}
     git add .
     git commit -m $commitMessage
+    git add .
+    git commit -m $commitMessage
     git push -f origin $newBranch
     push_res=$?
     while [ $push_res -ne 0 ]
@@ -80,11 +93,18 @@ function createPR() {
 }
 
 
+
 function main() {
     local CMD=$1
     local commitId=$2
     local newbranch=$3
     local title=$4
+    # TODO: delete http_proxy
+    echo ${USER}
+    echo ${HOME}
+    PATH=${PATH}:/usr/local/git/bin/
+    export http_proxy=http://172.19.57.45:3128
+    export https_proxy=http://172.19.57.45:3128
     case $CMD in
         githubPaddle)
             GithubPaddle_env
@@ -97,6 +117,9 @@ function main() {
             ;;
         prepareCode)
             createPR $newbranch $title
+            ;;
+        giteePaddle_env_update)
+            GiteePaddle_env_update
             ;;
             *)
             echo "Sorry, $CMD not recognized."
