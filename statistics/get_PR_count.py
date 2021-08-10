@@ -16,6 +16,7 @@ def BJtime(mergeTime):
     mergeTime = datetime.datetime.strftime(mergeTime, '%Y-%m')
     return mergeTime
 
+
 def getPersonnel(user):
     """
     判断是否为内部员工
@@ -30,6 +31,7 @@ def getPersonnel(user):
     elif isID:
         return [isID[0]['name'], isID[0]['email'], isID[0]['team']]
     return False
+
 
 def get_page(url, headers):
     """
@@ -57,9 +59,11 @@ def get_page(url, headers):
         page_num = 1
     return page_num
 
+
 def toFile(path, msg):
     with open(path, "w+", encoding='utf-8') as f:
         f.write(msg)
+
 
 def get_info(url, headers, page_num, date):
     user_dict = {}
@@ -80,13 +84,18 @@ def get_info(url, headers, page_num, date):
                         pr_url = info['url']
                         pr_res = requests.get(pr_url, headers=headers).json()
                         if email not in user_dict.keys():
-                            user_dict[email] = [user, email, team, 1, pr_res['additions'], pr_res['deletions']]
+                            user_dict[email] = [
+                                user, email, team, 1, pr_res['additions'],
+                                pr_res['deletions']
+                            ]
                         else:
                             user_dict[email][3] += 1
                             user_dict[email][4] += pr_res['additions']
                             user_dict[email][5] += pr_res['deletions']
     print(user_dict)
-    df = pd.DataFrame(user_dict.values(), columns=['name', 'email', 'team', 'PR数量', 'additions', 'deletions'])
+    df = pd.DataFrame(
+        user_dict.values(),
+        columns=['name', 'email', 'team', 'PR数量', 'additions', 'deletions'])
     file_path = pd.ExcelWriter('./%s_contribution.xlsx' % date)
     df.fillna(' ', inplace=True)
     df.to_excel(file_path, encoding='utf-8', index=False, sheet_name="个人贡献量统计")
@@ -95,17 +104,17 @@ def get_info(url, headers, page_num, date):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-            description=__doc__,
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        '--date', help='年-月', default='2021-07')
+        description=__doc__,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--date', help='年-月', default='2021-07')
     args = parser.parse_args()
     url = 'https://api.github.com/repos/PaddlePaddle/Paddle/pulls?state=closed&per_page=100'
-    headers = {'User-Agent': 'Mozilla/5.0',
-                'Authorization': 'token i',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-                }
+    headers = {
+        'User-Agent': 'Mozilla/5.0',
+        'Authorization': 'token i',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
 
     page_num = get_page(url, headers)
     res = get_info(url, headers, page_num, args.date)

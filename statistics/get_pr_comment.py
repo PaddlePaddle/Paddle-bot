@@ -16,6 +16,7 @@ def BJtime(mergeTime):
     mergeTime = datetime.datetime.strftime(mergeTime, '%Y-%m')
     return mergeTime
 
+
 def getPersonnel(user):
     """
     获取员工相关信息
@@ -30,6 +31,7 @@ def getPersonnel(user):
     elif isID:
         return [isID[0]['name'], isID[0]['email'], isID[0]['team']]
     return False
+
 
 def get_page(url, headers):
     """
@@ -54,6 +56,7 @@ def get_page(url, headers):
         page_num = 1
     return page_num
 
+
 def get_number(url, headers, page_num, date):
     """
     获取符合要求的PR/Issue号
@@ -69,6 +72,7 @@ def get_number(url, headers, page_num, date):
                 number_list[info['number']] = info['user']['login']
     return number_list
 
+
 def get_comment(headers, number_list, date):
     """
     统计信息
@@ -76,42 +80,47 @@ def get_comment(headers, number_list, date):
     user_dict = {}
     for number in number_list.keys():
         user_dict[number] = {}
-        url = 'https://api.github.com/repos/PaddlePaddle/Paddle/pulls/%s/comments?per_page=100'% number
+        url = 'https://api.github.com/repos/PaddlePaddle/Paddle/pulls/%s/comments?per_page=100' % number
         response = requests.get(url, headers=headers).json()
         for info in response:
-            if info and info['user']['login'] != 'paddle-bot[bot]' and info['user']['login'] != number_list[number]:
+            if info and info['user']['login'] != 'paddle-bot[bot]' and info[
+                    'user']['login'] != number_list[number]:
                 user_info = getPersonnel(info['user']['login'])
                 if user_info:
                     user = user_info[0]
                     email = user_info[1]
                     team = user_info[2]
                     if email not in user_dict[number].keys():
-                        user_dict[number][email] = [number, user, email, team, 1]
+                        user_dict[number][
+                            email] = [number, user, email, team, 1]
                     else:
                         user_dict[number][email][-1] += 1
     result_df = pd.DataFrame()
     for num in user_dict.keys():
-        df = pd.DataFrame(user_dict[num].values(), columns=['num', 'user', 'email', 'team', 'count'])
+        df = pd.DataFrame(
+            user_dict[num].values(),
+            columns=['num', 'user', 'email', 'team', 'count'])
         result_df = result_df.append(df)
     file_path = pd.ExcelWriter('./%s_pr_comments.xlsx' % date)
     result_df.fillna(' ', inplace=True)
-    result_df.to_excel(file_path, encoding='utf-8', index=False, sheet_name="PR")
-    file_path.save()   
+    result_df.to_excel(
+        file_path, encoding='utf-8', index=False, sheet_name="PR")
+    file_path.save()
     return user_dict
 
 
 if __name__ == '__main__':
     url = 'https://api.github.com/repos/PaddlePaddle/Paddle/pulls?per_page=100&state=all'
-    headers = {'User-Agent': 'Mozilla/5.0',
-                'Authorization': 'token i',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-                }
+    headers = {
+        'User-Agent': 'Mozilla/5.0',
+        'Authorization': 'token i',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
     parser = argparse.ArgumentParser(
-            description=__doc__,
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        '--date', help='年-月', default='2021-07')
+        description=__doc__,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--date', help='年-月', default='2021-07')
     args = parser.parse_args()
     page_num = get_page(url, headers)
     number_list = get_number(url, headers, page_num, args.date)
