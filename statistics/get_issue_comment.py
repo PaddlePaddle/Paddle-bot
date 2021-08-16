@@ -105,7 +105,7 @@ def get_comment(headers, number_list, date):
             user_dict[num].values(),
             columns=['num', 'user', 'email', 'team', 'state', 'count'])
         result_df = result_df.append(df)
-    file_path = pd.ExcelWriter('./%s_issue_comments.xlsx' % date)
+    file_path = pd.ExcelWriter('./pr_datas/%s_issue_comments.xlsx' % date)
     result_df.fillna(' ', inplace=True)
     result_df.to_excel(
         file_path, encoding='utf-8', index=False, sheet_name="Issue")

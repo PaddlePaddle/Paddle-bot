@@ -69,7 +69,8 @@ def get_number(url, headers, page_num, date):
         for info in res:
             created_at = BJtime(info['created_at'])
             if created_at == date:
-                number_list[info['number']] = info['user']['login']
+                number_list[info[
+                    'number']] = [info['user']['login'], info['state']]
     return number_list
 
 
@@ -82,26 +83,42 @@ def get_comment(headers, number_list, date):
         user_dict[number] = {}
         url = 'https://api.github.com/repos/PaddlePaddle/Paddle/pulls/%s/comments?per_page=100' % number
         response = requests.get(url, headers=headers).json()
+        # 获取PR作者相关信息
+        auther_info = getPersonnel(number_list[number][0])
+        if auther_info:
+            auther = auther_info[0]
+            auther_email = auther_info[1]
+            auther_team = auther_info[2]
+        else:
+            auther = number_list[number][0]
+            auther_email = None
+            auther_team = None
         for info in response:
             if info and info['user']['login'] != 'paddle-bot[bot]' and info[
-                    'user']['login'] != number_list[number]:
+                    'user']['login'] != number_list[number][0]:
+                # 获取评审人相关信息
                 user_info = getPersonnel(info['user']['login'])
                 if user_info:
                     user = user_info[0]
                     email = user_info[1]
                     team = user_info[2]
-                    if email not in user_dict[number].keys():
-                        user_dict[number][
-                            email] = [number, user, email, team, 1]
-                    else:
-                        user_dict[number][email][-1] += 1
+                if email not in user_dict[number].keys():
+                    user_dict[number][email] = [
+                        number, user, email, team, number_list[number][1], 1,
+                        auther, auther_email, auther_team
+                    ]
+                else:
+                    user_dict[number][email][5] += 1
     result_df = pd.DataFrame()
     for num in user_dict.keys():
         df = pd.DataFrame(
             user_dict[num].values(),
-            columns=['num', 'user', 'email', 'team', 'count'])
+            columns=[
+                'num', 'user', 'email', 'team', 'state', 'count', 'pr_auther',
+                'auther_email', 'auther_team'
+            ])
         result_df = result_df.append(df)
-    file_path = pd.ExcelWriter('./%s_pr_comments.xlsx' % date)
+    file_path = pd.ExcelWriter('./pr_datas/%s_pr_comments.xlsx' % date)
     result_df.fillna(' ', inplace=True)
     result_df.to_excel(
         file_path, encoding='utf-8', index=False, sheet_name="PR")
@@ -113,7 +130,7 @@ if __name__ == '__main__':
     url = 'https://api.github.com/repos/PaddlePaddle/Paddle/pulls?per_page=100&state=all'
     headers = {
         'User-Agent': 'Mozilla/5.0',
-        'Authorization': 'token i',
+        'Authorization': 'token ',
         'Content-Type': 'application/json',
         'Accept': 'application/json'
     }
