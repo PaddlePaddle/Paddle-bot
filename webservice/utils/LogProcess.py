@@ -11,6 +11,7 @@
 
 class LogProcessMap(object):
     def __init__(self, excode_dict):
+        # TODO: 为相应错误码设置对应的回调函数
         self.cutterFunc = {
             '64': self.TestFailedCutter,
             '63': self.TestFailedCutter,
@@ -25,6 +26,7 @@ class LogProcessMap(object):
             '15': self.TestFailedCutter
         }
 
+        # TODO: 配置错误码对应的关键字
         self.excode2keyword = {
             '64': 'check docker md5 fail',
             '63': '',
@@ -46,10 +48,13 @@ class LogProcessMap(object):
     def TestFailedCutter(self, excode, log_arr):
         if excode not in self.excode2keyword:
             return self.DefaultCutter(excode, log_arr)
+        # 找到excode对应的关键字
         key_word = self.excode2keyword[excode]
+        # 找到关键字那一行所在的下标
         key_word_index = self.find_key_word_index(log_arr, key_word)
         return self.DefaultCut(log_arr, key_word_index)
 
+    # 以index所在行为中心，截取前10行和后10行
     def DefaultCut(self, log_arr, index):
         left = max(0, index - 10)
         right = min(len(log_arr), index + 11)
@@ -75,14 +80,13 @@ class LogProcessMap(object):
                 break
         return index
 
-    def run(self, excode, log):
+    # 这里的log_arr是日志内容字符串按行分割的数组，每个元素是日志的一行
+    def run(self, excode, log_arr):
+        # 找到excode对应的描述信息，如果是未知excode，则赋值为Unknown
         describe = self.excode2name[
             excode] if excode in self.excode2name else "Unknown Failed"
+        # 如果excode是未知的，则默认截取最后20行
         if excode not in self.cutterFunc:
-            return describe, self.DefaultCutter(excode, log)
-        return describe, self.cutterFunc[excode](excode, log)
-
-
-# if __name__ == '__main__':
-#     go = LogProcessMap()
-#     go.run( '1', None )
+            return describe, self.DefaultCutter(excode, log_arr)
+        # 否则回调相应的函数
+        return describe, self.cutterFunc[excode](excode, log_arr)

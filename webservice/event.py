@@ -685,8 +685,8 @@ async def my_update_ci_failure_summary(gh, context, ci_link, comment_list, PR,
                                        shortId):
     """erase corrected CI"""
     failed_ci_bullet = "- <b>Failed: %s</b>"
+    # TODO: 记得更改bot-name!!!!!!
     bot_name = "just-test-paddle[bot]"
-    print('my_update_ci_failure_summary')
     for i in range(len(comment_list)):
         comment_sender = comment_list[i]['user']['login']
         comment_body = comment_list[i]['body']
@@ -697,16 +697,13 @@ async def my_update_ci_failure_summary(gh, context, ci_link, comment_list, PR,
             if ci_link.startswith('https://xly.bce.baidu.com'):
                 split_body = comment_body.split("\r\n")
                 split_body = remove_myself(split_body, context)
-                print("come here")
                 if have_failed_ci(split_body):
-                    print('have failed ci')
                     logger.info(
                         "Successful trigger logic for ERASE corrected XLY bullet: %s; sha: %s"
                         % (PR, shortId))
                     update_message = ''.join(split_body)
                     await gh.patch(update_url, data={"body": update_message})
                 else:
-                    print('no failed ci')
                     logger.info(
                         "ERASE ALL comment as NO bullet left after erase last XLY bullet: %s; sha: %s"
                         % (PR, shortId))

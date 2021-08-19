@@ -7,11 +7,18 @@ from utils.readConfig import ReadConfig
 from utils.auth_ipipe import Get_ipipe_auth
 from utils.handler import xlyHandler
 from utils.LogProcess import LogProcessMap
-import heapq
+import requests
+import logging
 import re
 
 # target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3246472/job/607918://xly.bce.baidu.com/paddlepaddle/Paddle-Bot/newipipe/detail/3222850/job/5980154'
 local_config = ReadConfig(path='conf/config.ini')
+logging.basicConfig(
+    level=logging.INFO,
+    filename='./logs/event.log',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger(__name__)
 
 # container
 # target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3346261/job/6472579'
@@ -21,7 +28,7 @@ local_config = ReadConfig(path='conf/config.ini')
 # target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3346262/job/6472581'
 # target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3346257/job/6472572'
 
-# target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3389740/job/6647699'
+target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3389740/job/6647699'
 
 # error_patterns = { 
 #                  'abort': 1,
@@ -40,6 +47,7 @@ local_config = ReadConfig(path='conf/config.ini')
 # no excode
 # check docker md5 fail ! https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/2555018/job/3564288
 
+#--------------------------------log and excode related-----------------------------
 _EXCODE_DICT = { 'docker_build_failed': 64,\
         'clone_code_failed': 63, \
         'temporary_files_failed': 65,\
@@ -66,10 +74,44 @@ def download_log(logUrl, job):
     # 下载到logs目录下
     if not os.path.exists('logs'):
         os.mkdir('logs')
-    log_name = 'logs/stageBuildId-%d_jobId-%d_jobName-%s.log' % (
-        job['stageBuildId'], job['id'], job['jobName'])
+    log_name = 'logs/stageBuildId-%d_jobId-%d.log' % (job['stageBuildId'],
+                                                      job['id'])
     xly.getJobLog(log_name, logUrl)
     return log_name
+
+
+def read_log(log_name):
+    if not os.path.exists(log_name):
+        return None
+    # TODO: efficient
+    # read last N lines
+    # TODO: catch exception
+    ret = []
+    file = open(log_name, 'r')
+    while True:
+        line = file.readline()
+        if not line:
+            break
+        ret.append(line)
+    file.close()
+    os.unlink(log_name)
+    return ret
+
+
+def recv_log_in_mem(logUrl):
+    try:
+        r = requests.get(logUrl)
+    except Exception as e:
+        print('Error: %s' % (e))
+        logger.warn("Error: %s" % e)
+    else:
+        return str(r.content, encoding='utf-8')
+    return None
+
+
+def download_and_read_log(logUrl, job):
+    log_name = download_log(logUrl, job)
+    return read_log(log_name)
 
 
 def get_container_failed_log(stage_build_beans):
@@ -79,9 +121,10 @@ def get_container_failed_log(stage_build_beans):
         if stage_name == 'clone code':
             if stage['status'] == 'FAIL':
                 # 如果在clone-code阶段就失败了，那么就不下载了
-                print('failed in clone code stage')
+                # print('failed in clone code stage')
                 ## TODO: 在PR页面显示这个错误原因
-                return None
+                # return None
+                return 'failed in clone code stage'
         else:
             for job in job_group_build_beans:
                 job_name = job['jobName']
@@ -90,14 +133,15 @@ def get_container_failed_log(stage_build_beans):
                     if status == 'FAIL':
                         # 如果在build-docker-image就失败了，那么就不下载了
                         ## TODO: 在PR页面显示是什么错误原因
-                        print('failed in Xxxx job')
-                        return None
+                        # print('failed in Xxxx job')
+                        # return None
+                        return 'failed in %s job' % (job_name)
                     continue
                 if status == 'FAIL':
                     logParam = job['realJobBuild']['logUrl']
                     logUrl = local_config.cf.get('ipipeConf',
                                                  'log_url') + logParam
-                    return download_log(logUrl, job)
+                    return recv_log_in_mem(logUrl)
     return None
 
 
@@ -110,14 +154,14 @@ def get_sa_failed_log(stage_build_beans):
             if job_name == 'Git-clone':
                 # 如果在Git-cline阶段就失败了，那么就不下载了
                 if status == 'FAIL':
-                    print('failed in Git-clone job')
+                    # print('failed in Git-clone job')
                     ## TODO: 在PR页面显示是什么错误原因
-                    return None
+                    return 'failed in GIt-clone job'
             else:
                 if status == 'FAIL':
                     taskid = job['realJobBuild']['shellBuild']['taskId']
                     logUrl = "https://xly.bce.baidu.com/paddlepaddle/paddle-ci/sa_log/log/download/%s" % taskid
-                    return download_log(logUrl, job)
+                    return recv_log_in_mem(logUrl)
     return None
 
 
@@ -128,6 +172,7 @@ def get_failed_log(target_url):
         res = session.send(req).json()
     except Exception as e:
         print('Error: %s' % e)
+        log.warn('Error: %s' % (e))
     else:
         paddle_container_ci = tuple(
             local_config.cf.get('CIIndexScope', 'Paddle_container_ci').split(
@@ -137,6 +182,7 @@ def get_failed_log(target_url):
         if res['pipelineConfName'].startswith(paddle_container_ci):
             return get_container_failed_log(stage_build_beans)
         return get_sa_failed_log(stage_build_beans)
+    return None
 
 
 def remove_prefix_date(line):
@@ -156,38 +202,47 @@ def get_excode(line):
                 break
             ret = ret * 10 + int(line[i])
         return str(ret) if ret != 0 else '-1'
-    if line.find('Connection refused') != -1:
+    if line.find('Failed to connect to') != -1:
         return '503'
     # TODO:
 
     return '-1'
 
 
-def get_excode_and_log(failed_log_path):
+def get_excode_from_log(log_arr):
     excode = '-1'
-    log = []
     # 每行
-    skip_word = ['+ ', '- ']
-    with open(failed_log_path) as log_file_fd:
-        for line in log_file_fd:
-            line = remove_prefix_date(line)
-            if len(line) == 0 or (len(line) > 1 and line[0:2] in skip_word):
-                continue
-            log.append(line)
-            if excode == '-1':
-                excode = get_excode(line)
-    log_file_fd.close()
-    if os.path.exists(failed_log_path):
-        os.unlink(failed_log_path)
-    return excode, log
+    skip_word = ['+ ', '- ', '\n', '\r\n']
+    for line in log_arr:
+        line = remove_prefix_date(line)
+        if len(line) == 0 or (len(line) > 1 and line[0:2] in skip_word):
+            continue
+        excode = get_excode(line)
+        if excode != '-1':
+            break
+    return excode
 
 
-def process_failed_log(failed_log_path):
-    if failed_log_path == None:
+def split_str_and_reserve_delimiter(log_str, delimiter):
+    return [k + delimiter for k in log_str.split(delimiter)]
+
+
+# 传入的参数log_str是整个日志内容，类型为string
+# FIXME: 如果可以断言要截取的日志一定在最后的N行，那么可以只传入部分日志
+# 但是这个N应该怎么确定
+def process_failed_log(log_str):
+    if log_str == None:
         return 'Unknown Failed', None
-    excode, log = get_excode_and_log(failed_log_path)
+    # 在clone code获取build docker步骤失败
+    if log_str.startswith('failed in') or len(log_str) < 100:
+        return log_str, None
+    log_arr = split_str_and_reserve_delimiter(log_str, '\n')
+    excode = get_excode_from_log(log_arr)
     dispatcher = LogProcessMap(_EXCODE_DICT)
-    return dispatcher.run(excode, log)
+    return dispatcher.run(excode, log_arr)
+
+
+# ------------------------CI related-----------------------------
 
 
 def generate_item_title(pr, shortId):
@@ -206,14 +261,13 @@ def generate_item_header(ci_link, context):
 
 def generate_item_tail(describe, error_log):
     log = '<details><summary>%s</summary><pre><code>%s</code></pre></details>\r\n' % (
-        describe, error_log)
+        describe, error_log if error_log != None else describe)
     return log
 
 
 def generate_failed_ci_item(ci_link, context, describe, error_log):
     header = generate_item_header(ci_link, context)
-    tail = generate_item_tail(
-        describe, error_log) if describe != None and error_log != None else ''
+    tail = generate_item_tail(describe, error_log) if describe != None else ''
     ret = header + tail
     return ret
 
@@ -274,8 +328,9 @@ def have_failed_ci(body_arr):
     return False
 
 
-# log_path = get_failed_log( target_url )
-# describe, content = process_failed_log( log_path )
-# print( 'describe=[%s]'% ( describe ) )
-# print( 'content=[%s]'% ( content ) )
-# print( 'content=[' )
+target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3406023/job/6708016'
+log_content = get_failed_log(target_url)
+print('log_content[%s]...' % (log_content[0:25]))
+describe, content = process_failed_log(log_content)
+print('describe=[%s]' % (describe))
+print('content=[%s]' % (content))
