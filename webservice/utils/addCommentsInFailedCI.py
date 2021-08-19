@@ -233,7 +233,7 @@ def split_str_and_reserve_delimiter(log_str, delimiter):
 def process_failed_log(log_str):
     if log_str == None:
         return 'Unknown Failed', None
-    # 在clone code获取build docker步骤失败
+    # 在clone code或者build docker步骤失败
     if log_str.startswith('failed in') or len(log_str) < 100:
         return log_str, None
     log_arr = split_str_and_reserve_delimiter(log_str, '\n')
@@ -328,9 +328,9 @@ def have_failed_ci(body_arr):
     return False
 
 
-target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3406023/job/6708016'
-log_content = get_failed_log(target_url)
-print('log_content[%s]...' % (log_content[0:25]))
-describe, content = process_failed_log(log_content)
-print('describe=[%s]' % (describe))
-print('content=[%s]' % (content))
+# target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3406023/job/6708016'
+# log_content = get_failed_log( target_url )
+# print( 'log_content[%s]...' % ( log_content[ 0: 25 ] ) )
+# describe, content = process_failed_log( log_content )
+# print( 'describe=[%s]'% ( describe ) )
+# print( 'content=[%s]'% ( content ) )
