@@ -264,7 +264,6 @@ def remove_myself(body_arr, ci_name):
         if body_arr[index[0]].find(ci_name) != -1:
             body_arr[index[0]:] = body_arr[index[1] + 1:] if index[
                 1] >= 0 else []
-            # FIXME: 如果两条要交换的评论长度不同怎么办？
             break
     return body_arr
 
