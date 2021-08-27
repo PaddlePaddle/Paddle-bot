@@ -1,10 +1,9 @@
 from gidgethub import routing
-from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, getPRNum, getCommitComments, xlyJob
+from utils.check import checkPRNotCI, checkPRTemplate, checkComments, checkCIState, getPRnum, ifCancelXly, getCommitComments, xlyJob
 from utils.readConfig import ReadConfig
-from utils.analyze_buildLog import ifDocumentFix, ifAlreadyExist, getBasicCIIndex
+from utils.analyze_buildLog import ifDocumentFix, ifAlreadyExist, analysisBuildLog
 from utils.db import Database
 from utils.convert import javaTimeTotimeStamp
-from utils.addCommentsInFailedCI import get_failed_log, process_failed_log, generate_failed_ci_item, remove_myself, append_myself, have_failed_ci, add_crlf, generate_item_title
 import time
 import logging
 import re
@@ -221,8 +220,6 @@ async def check_close_regularly(event, gh, repo, *args, **kwargs):
 @router.register("status")
 async def get_ci_index(event, gh, repo, *args, **kwargs):
     """get_ci_index"""
-    # FIXME: 有报错，先做完主要的,暂时return
-    return
     target_url = event.data['target_url']
     if target_url.startswith('https://xly.bce.baidu.com') and event.data[
             'state'] in ['success', 'failure']:
@@ -255,8 +252,10 @@ async def get_ci_index(event, gh, repo, *args, **kwargs):
                     basic_ci_index_dict[
                         'EXCODE'] = 0 if state == 'success' else 1
                 else:
-                    timeciindex = getBasicCIIndex(repo, commitId, document_fix,
-                                                  target_url)
+                    analysis_Log_object = analysisBuildLog(repo, commitId,
+                                                           target_url)
+                    timeciindex = analysis_Log_object.getBasicCIIndex(
+                        document_fix)
                     for key in timeciindex:
                         basic_ci_index_dict[key] = timeciindex[key]
                 ifInsert = False  #查询30s内是否已经插入数据了
@@ -318,32 +317,101 @@ async def get_ci_index(event, gh, repo, *args, **kwargs):
                                      commitId))
 
 
+@router.register("status")
+async def check_ci_failure(event, gh, repo, *args, **kwargs):
+    """check commits whether passed all CI or contain failed CI"""
+    if repo in ['PaddlePaddle/Paddle', 'PaddlePaddle/benchmark']:
+        state = event.data['state']
+        context = event.data['context']
+        commit_url = event.data["commit"]["url"]
+        combined_statuses_url = commit_url + "/status"
+        comment_url = event.data["commit"]["comments_url"]
+        ci_link = event.data['target_url']
+        ifCancel = ifCancelXly(ci_link)
+        if ifCancel == True:
+            logger.info("cancel ci_link: %s" % ci_link)
+        else:
+            commitId = event.data['sha']
+            shortId = commitId[0:7]
+            pr_search_url = "https://api.github.com/search/issues?q=sha:" + commitId
+            required_ci_list = localConfig.cf.get(repo, 'REQUIRED_CI')
+            sender = event.data['commit']['author']['login']
+            if sender in [
+                    'lelelelelez', 'randytli', 'lanxianghit', 'zhiqiu',
+                    'chenwhql', 'GaoWei8', 'gfwm2013', 'phlrain', 'Xreki',
+                    'liym27', 'luotao1', 'pangyoki', 'tianshuo78520a', 'iducn',
+                    'feng626', 'wangchaochaohu', 'wanghuancoder', 'wzzju',
+                    'joejiong', 'Aurelius84', 'zhangting2020', 'zhhsplendid',
+                    'zhouwei25'
+            ]:
+                pr_num = getPRNum(pr_search_url)
+                commits_url = "https://api.github.com/repos/" + repo + "/pulls/" + str(
+                    pr_num) + "/commits?per_page=250"
+                comment_list = checkComments(comment_url)
+                combined_ci_status, required_all_passed = await checkCIState(
+                    combined_statuses_url, required_ci_list)
+                if state in ['success', 'failure', 'error']:
+                    if state == 'success':
+                        if combined_ci_status != 'success':
+                            await update_ci_failure_summary(
+                                gh, context, ci_link, comment_list, pr_num,
+                                shortId)
+                        if combined_ci_status == 'success' or required_all_passed is True:
+                            if len(comment_list) == 0:
+                                message = localConfig.cf.get(
+                                    repo, 'STATUS_CI_SUCCESS')
+                                logger.info(
+                                    "Successful trigger logic for CREATE success comment: %s; sha: %s"
+                                    % (pr_num, shortId))
+                                await gh.post(
+                                    comment_url, data={"body": message})
+                                await clean_parent_comment_list(
+                                    gh, commits_url, pr_num, shortId)
+                            else:
+                                for i in range(len(comment_list)):
+                                    comment_sender = comment_list[i]['user'][
+                                        'login']
+                                    comment_body = comment_list[i]['body']
+                                    update_url = comment_list[i]['url']
+                                    if comment_sender == "paddle-bot[bot]" and comment_body.startswith(
+                                            '## 🕵️'):
+                                        update_message = localConfig.cf.get(
+                                            repo, 'STATUS_CI_SUCCESS')
+                                        logger.info(
+                                            "Successful trigger logic for CORRECT failed comment: %s; sha: %s"
+                                            % (pr_num, shortId))
+                                        await gh.delete(update_url)
+                                        await gh.post(
+                                            comment_url,
+                                            data={"body": update_message})
+                    else:
+                        await create_add_ci_failure_summary(
+                            gh, context, comment_url, ci_link, shortId, pr_num,
+                            comment_list, commits_url)
+
+
 async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                                         shortId, pr_num, comment_list,
                                         commits_url):
     """gradually find failed CI"""
     hyperlink_format = '<a href="{link}">{text}</a>'
-    # failed_header = "## 🕵️ CI failures summary\r\n"
-    # failed_template = "🔍 PR: <b>#" + str(
-    #     pr_num) + "</b> Commit ID: <b>%s</b> contains failed CI.\r\n"
+    failed_header = "## 🕵️ CI failures summary\r\n"
+    failed_template = "🔍 PR: <b>#" + str(
+        pr_num) + "</b> Commit ID: <b>%s</b> contains failed CI.\r\n"
     failed_ci_bullet = "- <b>Failed: %s</b>"
     failed_ci_hyperlink = hyperlink_format.format(link=ci_link, text=context)
     if len(comment_list) == 0:
         if ci_link.startswith('https://xly.bce.baidu.com'):
-            # error_message = failed_header + failed_template % str(
-            #     shortId) + failed_ci_bullet % failed_ci_hyperlink
-            error_message = generate_item_title(
-                pr_num, shortId) + failed_ci_bullet % failed_ci_hyperlink
+            error_message = failed_header + failed_template % str(
+                shortId) + failed_ci_bullet % failed_ci_hyperlink
             logger.info(
                 "Successful trigger logic for CREATE XLY bullet. pr num: %s; sha: %s"
                 % (pr_num, shortId))
             await gh.post(comment_url, data={"body": error_message})
             await clean_parent_comment_list(gh, commits_url, pr_num, shortId)
         else:
-            # error_message = failed_header + failed_template % str(
-            #     shortId) + failed_ci_bullet % context
-            error_message = generate_item_title(
-                pr_num, shortId) + failed_ci_bullet % context
+            error_message = failed_header + failed_template % str(
+                shortId) + failed_ci_bullet % context
             logger.info(
                 "Successful trigger logic for CREATE TC bullet. pr num: %s; sha: %s"
                 % (pr_num, shortId))
@@ -399,10 +467,7 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
             elif comment_sender == "paddle-bot[bot]" and comment_body.startswith(
                     '✅️'):
                 if ci_link.startswith('https://xly.bce.baidu.com'):
-                    # update_message = failed_header + failed_template % str(
-                    #     shortId) + failed_ci_bullet % failed_ci_hyperlink
-                    update_message = generate_item_title(
-                        pr_num,
+                    update_message = failed_header + failed_template % str(
                         shortId) + failed_ci_bullet % failed_ci_hyperlink
                     logger.info(
                         "Successful trigger logic for CHANGE Success Comment to XLY bullet. pr num: %s; sha: %s"
@@ -410,10 +475,8 @@ async def create_add_ci_failure_summary(gh, context, comment_url, ci_link,
                     await gh.delete(update_url)
                     await gh.post(comment_url, data={"body": update_message})
                 else:
-                    # update_message = failed_header + failed_template % str(
-                    #     shortId) + failed_ci_bullet % context
-                    update_message = generate_item_title(
-                        pr_num, shortId) + failed_ci_bullet % context
+                    update_message = failed_header + failed_template % str(
+                        shortId) + failed_ci_bullet % context
                     logger.info(
                         "Successful trigger logic for CHANGE Success Comment to TC bullet. pr num: %s; sha: %s"
                         % (pr_num, shortId))
@@ -489,11 +552,6 @@ async def clean_parent_comment_list(gh, commits_url, pr_num, shortId):
                     else:
                         logger.info("Comment from User: %s, stop cleaning." %
                                     comment_sender)
-
-
-@router.register("status")
-async def check_ci_failure(event, gh, repo, *args, **kwargs):
-    print('check_ci_failure')
 
 
 @router.register("status")

@@ -20,32 +20,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# container
-# target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3346261/job/6472579'
-
-# sa
-# target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3346268/job/6472595'
-# target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3346262/job/6472581'
-# target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3346257/job/6472572'
-
-target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3389740/job/6647699'
-
-# error_patterns = { 
-#                  'abort': 1,
-#                  'Your change doesn\'t follow python\'s code style.': 1,
-# 		 'make: \*\*\* [all] Error 2' : 1, # excode 7 https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/2503801/job/3499729
-#                  'The following tests FAILED' : 1, # excode 8 https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/2487781/job/3481353
-#                  'There are * approved errors.': 1, # excode 6 https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/2502654/job/3498271
-#                  'Coverage Failed!': 1, # excode 9 https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/2484394/job/3477511
-#                  'Code format error': 1, # excode 4 https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/2479299/job/3472009
-#                  'Merge conflict': 1 # excode 2 https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/2616766/job/3649977
-# }
-
-# 找不到excode关键字
-# https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/2503735/job/3499641
-
-# no excode
-# check docker md5 fail ! https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/2555018/job/3564288
+target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3457183/job/6909744'
 
 #--------------------------------log and excode related-----------------------------
 _EXCODE_DICT = { 'docker_build_failed': 64,\
@@ -156,11 +131,17 @@ def get_sa_failed_log(stage_build_beans):
                 if status == 'FAIL':
                     # print('failed in Git-clone job')
                     ## TODO: 在PR页面显示是什么错误原因
-                    return 'failed in GIt-clone job'
+                    return 'failed in Git-clone job'
             else:
                 if status == 'FAIL':
-                    taskid = job['realJobBuild']['shellBuild']['taskId']
-                    logUrl = "https://xly.bce.baidu.com/paddlepaddle/paddle-ci/sa_log/log/download/%s" % taskid
+                    logUrl = None
+                    if 'shellBuild' not in job['realJobBuild']:
+                        logParam = job['realJobBuild']['logUrl']
+                        logUrl = local_config.cf.get('ipipeConf',
+                                                     'log_url') + logParam
+                    else:
+                        taskid = job['realJobBuild']['shellBuild']['taskId']
+                        logUrl = "https://xly.bce.baidu.com/paddlepaddle/paddle-ci/sa_log/log/download/%s" % taskid
                     return recv_log_in_mem(logUrl)
     return None
 
@@ -172,8 +153,9 @@ def get_failed_log(target_url):
         res = session.send(req).json()
     except Exception as e:
         print('Error: %s' % e)
-        log.warn('Error: %s' % (e))
-    else:
+        logger.warn('Error: %s' % (e))
+
+    try:
         paddle_container_ci = tuple(
             local_config.cf.get('CIIndexScope', 'Paddle_container_ci').split(
                 ','))
@@ -182,6 +164,8 @@ def get_failed_log(target_url):
         if res['pipelineConfName'].startswith(paddle_container_ci):
             return get_container_failed_log(stage_build_beans)
         return get_sa_failed_log(stage_build_beans)
+    except Exception as e:
+        logger.warn(' Error: %s ' % (e))
     return None
 
 
@@ -234,7 +218,7 @@ def process_failed_log(log_str):
     if log_str == None:
         return 'Unknown Failed', None
     # 在clone code或者build docker步骤失败
-    if log_str.startswith('failed in') or len(log_str) < 100:
+    if log_str.startswith('failed in') or len(log_str) < 20:
         return log_str, None
     log_arr = split_str_and_reserve_delimiter(log_str, '\n')
     excode = get_excode_from_log(log_arr)
@@ -253,7 +237,7 @@ def generate_item_title(pr, shortId):
 
 def generate_item_header(ci_link, context):
     hyperlink_format = '<a href="{link}">{text}</a>'
-    failed_ci_bullet = "<b>Failed: %s</b>"
+    failed_ci_bullet = ':u6709: <b>Failed: %s</b>'
     failed_ci_hyperlink = hyperlink_format.format(link=ci_link, text=context)
     item = failed_ci_bullet % failed_ci_hyperlink
     return item
@@ -261,7 +245,8 @@ def generate_item_header(ci_link, context):
 
 def generate_item_tail(describe, error_log):
     log = '<details><summary>%s</summary><pre><code>%s</code></pre></details>\r\n' % (
-        describe, error_log if error_log != None else describe)
+        describe if describe != None else 'Log is Empty?', error_log
+        if error_log != None else describe)
     return log
 
 
@@ -328,9 +313,8 @@ def have_failed_ci(body_arr):
     return False
 
 
-# target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3406023/job/6708016'
-# log_content = get_failed_log( target_url )
-# print( 'log_content[%s]...' % ( log_content[ 0: 25 ] ) )
-# describe, content = process_failed_log( log_content )
-# print( 'describe=[%s]'% ( describe ) )
-# print( 'content=[%s]'% ( content ) )
+log_content = get_failed_log(target_url)
+print('log_content[%s]...' % (log_content[0:25]))
+describe, content = process_failed_log(log_content)
+print('describe=[%s]' % (describe))
+print('content=[%s]' % (content))

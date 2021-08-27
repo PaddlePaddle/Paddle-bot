@@ -1,4 +1,4 @@
-#~/usr/bin/python3
+#!/usr/bin/python3
 
 # 1. 根据log找到对应的excode: 
 #    首先根据关键字比如conection refused匹配到就是503，
@@ -13,17 +13,17 @@ class LogProcessMap(object):
     def __init__(self, excode_dict):
         # TODO: 为相应错误码设置对应的回调函数
         self.cutterFunc = {
-            '64': self.TestFailedCutter,
-            '63': self.TestFailedCutter,
-            '65': self.TestFailedCutter,
-            '7': self.TestFailedCutter,
+            '64': self.CenterCutter,
+            '63': self.CenterCutter,
+            '65': self.CenterCutter,
+            '7': self.CenterCutter,
             '8': self.TestFailedCutter,
-            '9': self.TestFailedCutter,
-            '503': self.TestFailedCutter,
-            '6': self.TestFailedCutter,
-            '4': self.TestFailedCutter,
-            '2': self.TestFailedCutter,
-            '15': self.TestFailedCutter
+            '9': self.CenterCutter,
+            '503': self.CenterCutter,
+            '6': self.CenterCutter,
+            '4': self.CenterCutter,
+            '2': self.CenterCutter,
+            '15': self.CenterCutter
         }
 
         # TODO: 配置错误码对应的关键字
@@ -51,13 +51,31 @@ class LogProcessMap(object):
         # 找到excode对应的关键字
         key_word = self.excode2keyword[excode]
         # 找到关键字那一行所在的下标
-        key_word_index = self.find_key_word_index(log_arr, key_word)
+        key_word_index, find = self.find_key_word_index(log_arr, key_word)
+        if not find:
+            return self.DefaultCutter(excode, log_arr)
+        return self.RangeCut(log_arr, key_word_index, 0, 21)
+
+    def CenterCutter(self, excode, log_arr):
+        if excode not in self.excode2keyword:
+            return self.DefaultCutter(excode, log_arr)
+        # 找到excode对应的关键字
+        key_word = self.excode2keyword[excode]
+        # 找到关键字那一行所在的下标
+        key_word_index, find = self.find_key_word_index(log_arr, key_word)
+        if not find:
+            return self.DefaultCutter(excode, log_arr)
         return self.DefaultCut(log_arr, key_word_index)
 
     # 以index所在行为中心，截取前10行和后10行
     def DefaultCut(self, log_arr, index):
-        left = max(0, index - 10)
-        right = min(len(log_arr), index + 11)
+        return self.RangeCut(log_arr, index, -10, 11)
+
+    def RangeCut(self, log_arr, index, upper_bias, lower_bias):
+        length = len(log_arr)
+        left = min(length, max(0, index + upper_bias))
+        right = min(length, max(0, index + lower_bias))
+        print('cut[%d, %d]' % (left, right))
         return ''.join(log_arr[left:right])
 
     def DefaultCutter(self, excode, log_arr):
@@ -74,11 +92,13 @@ class LogProcessMap(object):
         log_length = len(log_arr)
         # 防止越界
         index = max(0, log_length - 1)
+        find = False
         for i in range(log_length - 1, -1, -1):
             if log_arr[i].find(key_word) != -1:
                 index = i
+                find = True
                 break
-        return index
+        return index, find
 
     # 这里的log_arr是日志内容字符串按行分割的数组，每个元素是日志的一行
     def run(self, excode, log_arr):
