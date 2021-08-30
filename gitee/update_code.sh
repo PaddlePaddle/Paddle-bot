@@ -5,9 +5,15 @@ set -x
 ROOT_PATH=$PWD
 
 function GithubPaddle_env() {
-    rm -rf ${ROOT_PATH}/Paddle
     cd ${ROOT_PATH}
-    git clone https://github.com/PaddlePaddle-Gardener/Paddle.git
+    flag=1
+    while [ $flag != 0 ]
+    do
+        rm -rf ${ROOT_PATH}/Paddle
+        git clone https://github.com/PaddlePaddle-Gardener/Paddle.git
+        flag=$?
+        sleep 10
+    done
     ROOT_PATH=$PWD
     echo $ROOT_PATH
     TARGET_PATH=${ROOT_PATH}/Paddle
@@ -18,9 +24,15 @@ function GithubPaddle_env() {
 }
 
 function GiteePaddle_env() {
-    rm -rf ${ROOT_PATH}/gitee_Paddle
     cd ${ROOT_PATH}
-    /usr/local/git/bin/git clone https://gitee.com/paddlepaddle-gardener/Paddle.git gitee_Paddle
+    flag=1
+    while [ $flag != 0 ]
+    do
+        rm -rf ${ROOT_PATH}/gitee_Paddle
+        git clone https://gitee.com/paddlepaddle-gardener/Paddle.git gitee_Paddle
+        flag=$?
+        sleep 10
+    done
     TARGET_PATH=${ROOT_PATH}/gitee_Paddle
     BRANCH='develop'
     cd ${TARGET_PATH}
