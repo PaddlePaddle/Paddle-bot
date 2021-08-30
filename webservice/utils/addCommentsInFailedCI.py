@@ -11,7 +11,6 @@ import requests
 import logging
 import re
 
-# target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3246472/job/607918://xly.bce.baidu.com/paddlepaddle/Paddle-Bot/newipipe/detail/3222850/job/5980154'
 local_config = ReadConfig(path='conf/config.ini')
 logging.basicConfig(
     level=logging.INFO,
@@ -19,8 +18,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger(__name__)
-
-target_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/3457183/job/6909744'
 
 #--------------------------------log and excode related-----------------------------
 _EXCODE_DICT = { 'docker_build_failed': 64,\
@@ -310,10 +307,3 @@ def have_failed_ci(body_arr):
         if re.search(r"\">(.+?)</a></b>", line):
             return True
     return False
-
-
-log_content = get_failed_log(target_url)
-print('log_content[%s]...' % (log_content[0:25]))
-describe, content = process_failed_log(log_content)
-print('describe=[%s]' % (describe))
-print('content=[%s]' % (content))
