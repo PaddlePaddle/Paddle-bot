@@ -9,8 +9,6 @@ from utils.handler import PRHandler, xlyHandler
 
 
 class ErrorIpipJob(xlyHandler, PRHandler):
-
-
     def __init__(self):
         self.db = Database()
         self.container_ci = {
@@ -24,7 +22,7 @@ class ErrorIpipJob(xlyHandler, PRHandler):
                 '14621': 'Build-cuda102-cudnn8-mkl-gcc82',
                 '19133': 'Build-cuda112-cudnn8-mkl-gcc82',
                 '15568': 'Build-Mac-Python3',
-                },
+            },
             'xxx@baidu.com': {
                 '15107': 'Build-windows-cuda101-cudnn7-mkl',
                 '15108': 'Build-windows-cuda102-cudnn7-mkl',
@@ -36,23 +34,23 @@ class ErrorIpipJob(xlyHandler, PRHandler):
                 '18509': 'Build-windows-cuda102-cudnn7-noavx-mkl',
                 '18510': 'Build-windows-cuda101-cudnn7-noavx-mkl',
                 '18597': 'Build-windows-cuda110-cudnn8-mkl',
-                },
+            },
             'xxx@baidu.com': {
                 '18996': 'Build-ROCm401-MIOpen211-MKL',
-                },
+            },
         }
 
     def time_check(self, job_log):
         message_error = ''
         now_time = datetime.datetime.now().strftime('%Y-%m-%d')
-        log_time = job_log[0]['buildTime']/1000
+        log_time = job_log[0]['buildTime'] / 1000
         dateArray = datetime.datetime.fromtimestamp(log_time)
         log_time = dateArray.strftime('%Y-%m-%d')
 
         if log_time != now_time:
-            message_error = "time is old, logtime is %s, but today is %s" %(log_time,now_time)
+            message_error = "time is old, logtime is %s, but today is %s" % (
+                log_time, now_time)
         return message_error
-
 
     def status_check(self, job_log):
         message_error = ''
@@ -61,11 +59,10 @@ class ErrorIpipJob(xlyHandler, PRHandler):
             message_error = "log status is not success, please check log"
         return message_error
 
-
     def jobStatus(self):
         message_error = ''
         email_list = ['xxx@baidu.com', 'xxx@baidu.com']
-        for email_name,ci_dic in self.container_ci.items():
+        for email_name, ci_dic in self.container_ci.items():
             for job_id in ci_dic:
                 url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/ipipe/rest/v3/pipeline-builds?_embed[]=trigger&_embed[]=stageBuilds&_include[]=ext.indexOfStageWithCompileBuild&_include[]=stageBuilds.ext.releaseVersion&_limit=1&_offset=0&branch=develop&pipelineConfId=' + job_id
                 response = requests.get(url).text
@@ -73,7 +70,8 @@ class ErrorIpipJob(xlyHandler, PRHandler):
                 time_error_log = self.time_check(job_log)
                 status_error_log = self.status_check(job_log)
                 job_name = ci_dic[job_id]
-                log_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/%s/job/%s' %(job_log[0]['id'], job_log[0]['headJob'])
+                log_url = 'https://xly.bce.baidu.com/paddlepaddle/paddle/newipipe/detail/%s/job/%s' % (
+                    job_log[0]['id'], job_log[0]['headJob'])
                 if status_error_log != '':
                     email_list.append(email_name)
                     if message_error == '':
@@ -83,7 +81,6 @@ class ErrorIpipJob(xlyHandler, PRHandler):
         if message_error != '':
             email_list = list(set(email_list))
             self.sendMonitorMail(message_error, email_list)
-
 
     def sendMonitorMail(self, content, email_list):
         mail = Mail()
