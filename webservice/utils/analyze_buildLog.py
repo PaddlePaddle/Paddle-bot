@@ -66,6 +66,7 @@ class analysisBuildLog(object):
         self.repo = repo
         self.sha = sha
         self.target_url = target_url
+        self.Paddle_build_parallel_ci = tuple(localConfig.cf.get('CIIndexScope', 'Paddle_build_parallel_ci').split(','))
         self.Paddle_cpu_gpu_separate_ci_tuple = tuple(
             localConfig.cf.get('CIIndexScope', 'Paddle_cpu_gpu_separate_ci')
             .split(','))
@@ -261,6 +262,27 @@ class analysisBuildLog(object):
         SaCIIndex['job_status'] = job_status
         return SaCIIndex
 
+    def getBuildParallelCIIndex(self, stageBuildBeans):
+        BuildParallelCIIndex = {}
+        for stage in stageBuildBeans:
+            stageName = stage['stageName']
+            BuildParallelCIIndex[stageName] = {}
+            jobGroupBuildBeans = stage['jobGroupBuildBeans']
+            for Beans in jobGroupBuildBeans:
+                for job in Beans:
+                    BuildParallelCIIndex[stageName][job['jobName']] = {}
+                    BuildParallelCIIndex[stageName][job['jobName']]['status'] = job['status']
+                    if job['jobType'] == 'MULTI_PIPELINE_PLUGIN':
+                        pass
+                    elif job['jobName'] == 'Git-clone':
+                        BuildParallelCIIndex[stageName][job['jobName']]['startTime'] = int(str(job['realJobBuild']['shellBuild']['startTime'])[:-3])
+                        BuildParallelCIIndex[stageName][job['jobName']]['endTime'] = int(str(job['realJobBuild']['shellBuild']['endTime'])[:-3])
+                    else:
+                        BuildParallelCIIndex[stageName][job['jobName']]['startTime'] = int(str(job['realJobBuild']['startTime'])[:-3]) if job['status'] != 'WAITTING' else 0
+                        BuildParallelCIIndex[stageName][job['jobName']]['endTime'] = int(str(job['realJobBuild']['endTime'])[:-3]) if job['status'] != 'WAITTING' else 0
+                        BuildParallelCIIndex[stageName][job['jobName']]['logUrl'] = localConfig.cf.get('ipipeConf', 'log_url') + job['realJobBuild']['logUrl'] if job['status'] != 'WAITTING' else None
+        return BuildParallelCIIndex
+
     def getBasicCIIndex(self, ciName):
         """
         获取CI基础指标: 时间 + 状态 + 退出码
@@ -271,18 +293,14 @@ class analysisBuildLog(object):
         session, req = Get_ipipe_auth(stage_url)
         try:
             res = session.send(req).json()
-            #print(session.send(req).text)
         except Exception as e:
             print("Error: %s" % e)
         else:
             branch = res['branch']
             basic_ci_index_dict['branch'] = branch
-            PR = res['pipelineBuildBean']['stageBuildBeans'][0]['outParams'][
-                'AGILE_PULL_ID']
+            PR = res['pipelineBuildBean']['stageBuildBeans'][0]['outParams']['AGILE_PULL_ID']
             basic_ci_index_dict['PR'] = PR
-            commit_createTime = int(
-                str(res['pipelineBuildBean']['startTime'])
-                [:-3])  #commit提交时间/rerun时间
+            commit_createTime = int(str(res['pipelineBuildBean']['startTime'])[:-3]) #commit提交时间/rerun时间
             basic_ci_index_dict['commit_createTime'] = commit_createTime
             if res["pipelineBuildBean"]["reason"] == 'SKIP':
                 basic_ci_index_dict['EXCODE'] = 0
@@ -296,235 +314,208 @@ class analysisBuildLog(object):
                 else:
                     CIIndex = self.getSaCIIndex(stageBuildBeans)
             else:
-                if res['pipelineConfName'].startswith(
-                        self.Paddle_container_ci):
+                if res['pipelineConfName'].startswith(self.Paddle_build_parallel_ci):
+                    CIIndex = self.getBuildParallelCIIndex(stageBuildBeans)
+                elif res['pipelineConfName'].startswith(self.Paddle_container_ci):
                     CIIndex = self.getContainerCIIndex(stageBuildBeans)
                 else:
                     CIIndex = self.getSaCIIndex(stageBuildBeans)
-            if 'jobExecTime' in CIIndex:  #sa任务
+            testScope = []
+            if 'jobExecTime' in CIIndex: #sa任务
                 if 'clone_code_status' in CIIndex:
-                    waitTime_total = (CIIndex['clone_code_startTime'] -
-                                      commit_createTime) + (
-                                          CIIndex['job_startTime'] -
-                                          CIIndex['clone_code_endTime'])
-                    execTime_total = (CIIndex['jobExecTime']
-                                      ) + (CIIndex['clone_code_endTime'] -
-                                           CIIndex['clone_code_startTime'])
-                    basic_ci_index_dict['clone_code_startTime'] = CIIndex[
-                        'clone_code_startTime']
-                    basic_ci_index_dict['clone_code_endTime'] = CIIndex[
-                        'clone_code_endTime']
-                    basic_ci_index_dict['paddle_build_startTime'] = CIIndex[
-                        'job_startTime']
-                    basic_ci_index_dict['paddle_build_endTime'] = CIIndex[
-                        'job_endTime']
+                    waitTime_total = (CIIndex['clone_code_startTime'] - commit_createTime) + (CIIndex['job_startTime'] - CIIndex['clone_code_endTime'])
+                    execTime_total = (CIIndex['jobExecTime']) + (CIIndex['clone_code_endTime'] - CIIndex['clone_code_startTime'])
+                    basic_ci_index_dict['clone_code_startTime'] = CIIndex['clone_code_startTime']
+                    basic_ci_index_dict['clone_code_endTime'] = CIIndex['clone_code_endTime']
+                    basic_ci_index_dict['paddle_build_startTime'] = CIIndex['job_startTime']
+                    basic_ci_index_dict['paddle_build_endTime'] = CIIndex['job_endTime']
                     if CIIndex['clone_code_status'] == 'FAIL':
                         EXCODE = self.EXCODE_DICT['clone_code_failed']
                         basic_ci_index_dict['EXCODE'] = EXCODE
                         return basic_ci_index_dict
                 else:
-                    basic_ci_index_dict['paddle_build_startTime'] = CIIndex[
-                        'job_startTime']
-                    basic_ci_index_dict['paddle_build_endTime'] = CIIndex[
-                        'job_endTime']
-                    waitTime_total = CIIndex[
-                        'job_startTime'] - commit_createTime
+                    basic_ci_index_dict['paddle_build_startTime'] = CIIndex['job_startTime']
+                    basic_ci_index_dict['paddle_build_endTime'] = CIIndex['job_endTime']
+                    waitTime_total = CIIndex['job_startTime'] - commit_createTime if CIIndex['job_startTime'] !=0 else 0
                     execTime_total = CIIndex['jobExecTime']
-                if CIIndex['logUrl'] != None and self.repo in [
-                        'PaddlePaddle/Paddle'
-                ]:
-                    self.getIpipeBuildLog(res['pipelineConfName'],
-                                          commit_createTime, CIIndex['logUrl'])
                 if self.repo not in ['PaddlePaddle/Paddle']:
                     EXCODE = 0 if CIIndex['job_status'] == 'SUCC' else 1
+                elif res['pipelineConfName'].startswith(self.Paddle_sa_ci) and not res['pipelineConfName'].startswith(self.Paddle_sa_detailed_ci):
+                    EXCODE = 0 if CIIndex['job_status'] == 'SUCC' else 1
                 else:
-                    if CIIndex['logUrl'] != None:
-                        self.getIpipeBuildLog(res['pipelineConfName'],
-                                              commit_createTime,
-                                              CIIndex['logUrl'])
-                        log_filename = "buildLog/%s_%s_%s.log" % (
-                            res['pipelineConfName'], self.sha,
-                            commit_createTime)
-                        EXCODE = self.getExcode(res['pipelineConfName'],
-                                                log_filename)
-            elif 'cpu_build_status' in CIIndex:  #cpu/gpu
-                basic_ci_index_dict['clone_code_startTime'] = CIIndex[
-                    'clone_code_startTime']
-                basic_ci_index_dict['clone_code_endTime'] = CIIndex[
-                    'clone_code_endTime']
-                basic_ci_index_dict['docker_build_startTime'] = CIIndex[
-                    'docker_build_startTime']
-                basic_ci_index_dict['docker_build_endTime'] = CIIndex[
-                    'docker_build_endTime']
-                basic_ci_index_dict['paddle_build_startTime'] = CIIndex[
-                    'cpu_build_startTime']
-                basic_ci_index_dict['paddle_build_endTime'] = CIIndex[
-                    'cpu_build_endTime']
-                basic_ci_index_dict['paddle_gputest_startTime'] = CIIndex[
-                    'gpu_test_startTime']
-                basic_ci_index_dict['paddle_gputest_endTime'] = CIIndex[
-                    'gpu_test_endTime']
-                if CIIndex['cpu_logUrl'] != None and self.repo in [
-                        'PaddlePaddle/Paddle'
-                ]:
-                    self.getIpipeBuildLog(res['pipelineConfName'],
-                                          commit_createTime,
-                                          CIIndex['cpu_logUrl'], 'cpu')
-                if CIIndex['gpu_logUrl'] != None and self.repo in [
-                        'PaddlePaddle/Paddle'
-                ]:
-                    self.getIpipeBuildLog(res['pipelineConfName'],
-                                          commit_createTime,
-                                          CIIndex['gpu_logUrl'], 'gpu')
-                if CIIndex['clone_code_status'] == 'FAIL':
-                    waitTime_total = CIIndex[
-                        'clone_code_startTime'] - commit_createTime
-                    execTime_total = CIIndex['clone_code_endTime'] - CIIndex[
-                        'clone_code_startTime']
+                    if CIIndex['logUrl'] != None and self.repo in ['PaddlePaddle/Paddle']:
+                        self.getIpipeBuildLog(res['pipelineConfName'], commit_createTime, CIIndex['logUrl'])
+                        log_filename = "buildLog/%s_%s_%s.log" % (res['pipelineConfName'], self.sha, commit_createTime)
+                        EXCODE = self.getExcode(res['pipelineConfName'], log_filename)
+            
+            elif ciName.startswith(self.Paddle_build_parallel_ci):
+                for stage in CIIndex:
+                    for job in CIIndex[stage]:
+                        if job == '流水线复用插件':
+                            pass
+                        elif job == 'Git-clone':
+                            clone_code_status = CIIndex[stage][job]['status']
+                            basic_ci_index_dict['clone_code_startTime'] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['clone_code_endTime'] = CIIndex[stage][job]['endTime']
+                            waitTime_total = basic_ci_index_dict['clone_code_startTime'] - commit_createTime
+                            execTime_total = basic_ci_index_dict['clone_code_endTime'] - basic_ci_index_dict['clone_code_startTime']
+                            EXCODE = self.EXCODE_DICT['clone_code_failed'] if clone_code_status == 'FAIL' else 0
+                        elif job in ['构建镜像', 'build-docker-image']:
+                            build_docker_status = CIIndex[stage][job]['status']
+                            basic_ci_index_dict['docker_build_startTime'] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['docker_build_endTime'] = CIIndex[stage][job]['endTime']
+                            if build_docker_status == 'FAIL':
+                                waitTime_total = basic_ci_index_dict['docker_build_startTime'] - commit_createTime
+                                execTime_total = basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime']
+                                EXCODE = self.EXCODE_DICT['docker_build_failed']
+                        elif job == 'paddle-build':
+                            paddle_build_status = CIIndex[stage][job]['status']
+                            basic_ci_index_dict['paddle_build_startTime'] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['paddle_build_endTime'] = CIIndex[stage][job]['endTime']
+                            if self.repo in ['PaddlePaddle/Paddle'] and CIIndex[stage][job]['logUrl'] != None:
+                                self.getIpipeBuildLog(res['pipelineConfName'], commit_createTime, CIIndex[stage][job]['logUrl'], 'cpu')
+                            waitTime_total = (basic_ci_index_dict['docker_build_startTime'] - commit_createTime) + (basic_ci_index_dict['paddle_build_startTime'] - basic_ci_index_dict['docker_build_endTime'])
+                            execTime_total = (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime']) + (basic_ci_index_dict['paddle_build_endTime']- basic_ci_index_dict['paddle_build_startTime'])
+                            log_filename = "buildLog/%s_%s_%s_cpu.log" % (res['pipelineConfName'], self.sha, commit_createTime)
+                            EXCODE = self.getExcode(res['pipelineConfName'], log_filename) if paddle_build_status == 'FAIL' else 0
+                        else:
+                            testScope.append(job)
+                            basic_ci_index_dict['%s_startTime' %job.replace('-', '_')] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['%s_endTime' %job.replace('-', '_')] = CIIndex[stage][job]['endTime']
+                            if self.repo in ['PaddlePaddle/Paddle'] and CIIndex[stage][job]['logUrl'] != None:
+                                self.getIpipeBuildLog('%s_%s' %(res['pipelineConfName'], job.replace('-', '_')), commit_createTime, CIIndex[stage][job]['logUrl'], 'gpu')
+                if len(testScope) != 0:
+                    ##gputest 执行时间选耗时长的 等待时间选等待最长的？？合理吗？
+                    gpu_waitTime = 0
+                    gpu_execTime = 0
+                    gpu_excode = []
+                    for test in testScope:
+                        test = test.replace('-', '_')
+                        gpu_waitTime_tem = basic_ci_index_dict['%s_startTime' %test] - basic_ci_index_dict['docker_build_endTime']
+                        if gpu_waitTime_tem > gpu_waitTime:
+                            gpu_waitTime = gpu_waitTime_tem
+                        gpu_execTime_tem = basic_ci_index_dict['%s_endTime' %test] - basic_ci_index_dict['%s_startTime' %test]
+                        if gpu_execTime_tem > gpu_execTime:
+                            gpu_execTime = gpu_execTime_tem
+                        log_filename = "buildLog/%s_%s_%s_%s_gpu.log" %(res['pipelineConfName'], test.replace('-', '_'), self.sha, commit_createTime)
+                        if test == 'paddle_test' or len(testScope) == 1:
+                            EXCODE = self.getExcode(res['pipelineConfName'], log_filename)
+                        else:
+                            if test.split('_')[1] == 'infer':
+                                EXCODE_infer = self.getExcode(res['pipelineConfName'], log_filename)
+                                basic_ci_index_dict['EXCODE_infer'] = EXCODE_infer
+                    waitTime_total = (basic_ci_index_dict['docker_build_startTime'] - commit_createTime) + gpu_waitTime
+                    execTime_total = (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime'])  + gpu_execTime
+
+            elif ciName.startswith(self.Paddle_cpu_gpu_separate_ci_tuple):
+                for stage in CIIndex:
+                    for job in CIIndex[stage]:
+                        if job == 'Git-clone':
+                            clone_code_status = CIIndex[stage][job]['status']
+                            basic_ci_index_dict['clone_code_startTime'] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['clone_code_endTime'] = CIIndex[stage][job]['endTime']
+                        elif job in ['构建镜像', 'build-docker-image']:
+                            build_docker_status = CIIndex[stage][job]['status']
+                            basic_ci_index_dict['docker_build_startTime'] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['docker_build_endTime'] = CIIndex[stage][job]['endTime']
+                        elif job == 'paddle-build':
+                            paddle_build_status = CIIndex[stage][job]['status']
+                            basic_ci_index_dict['paddle_build_startTime'] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['paddle_build_endTime'] = CIIndex[stage][job]['endTime']
+                            if self.repo in ['PaddlePaddle/Paddle'] and CIIndex[stage][job]['logUrl'] != None:
+                                self.getIpipeBuildLog(res['pipelineConfName'], commit_createTime, CIIndex[stage][job]['logUrl'], 'cpu')
+                        else:
+                            testScope.append(job)
+                            basic_ci_index_dict['%s_startTime' %job.replace('-', '_')] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['%s_endTime' %job.replace('-', '_')] = CIIndex[stage][job]['endTime']
+
+                            if self.repo in ['PaddlePaddle/Paddle'] and CIIndex[stage][job]['logUrl'] != None:
+                                self.getIpipeBuildLog('%s_%s' %(res['pipelineConfName'], job.replace('-', '_')), commit_createTime, CIIndex[stage][job]['logUrl'], 'gpu')
+
+                if clone_code_status == 'FAIL':
+                    waitTime_total = basic_ci_index_dict['clone_code_startTime'] - commit_createTime
+                    execTime_total = basic_ci_index_dict['clone_code_endTime'] - basic_ci_index_dict['clone_code_startTime']
                     EXCODE = self.EXCODE_DICT['clone_code_failed']
-                elif CIIndex['docker_build_status'] == 'FAIL':
-                    waitTime_total = (CIIndex['clone_code_startTime'] -
-                                      commit_createTime) + (
-                                          CIIndex['docker_build_startTime'] -
-                                          CIIndex['clone_code_endTime'])
-                    execTime_total = (CIIndex['clone_code_endTime'] -
-                                      CIIndex['clone_code_startTime']) + (
-                                          CIIndex['docker_build_endTime'] -
-                                          CIIndex['docker_build_startTime'])
+                elif build_docker_status == 'FAIL':
+                    waitTime_total = (basic_ci_index_dict['clone_code_startTime'] - commit_createTime) + (basic_ci_index_dict['docker_build_startTime'] - basic_ci_index_dict['clone_code_endTime'])
+                    execTime_total = (basic_ci_index_dict['clone_code_endTime'] - basic_ci_index_dict['clone_code_startTime']) + (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime'])
                     EXCODE = self.EXCODE_DICT['docker_build_failed']
-                elif CIIndex['cpu_build_status'] == 'FAIL':
-                    waitTime_total = (CIIndex['clone_code_startTime'] -
-                                      commit_createTime) + (
-                                          CIIndex['docker_build_startTime'] -
-                                          CIIndex['clone_code_endTime']) + (
-                                              CIIndex['cpu_build_startTime'] -
-                                              CIIndex['docker_build_endTime'])
-                    execTime_total = (CIIndex['clone_code_endTime'] -
-                                      CIIndex['clone_code_startTime']
-                                      ) + (CIIndex['docker_build_endTime'] -
-                                           CIIndex['docker_build_startTime']
-                                           ) + (CIIndex['cpu_build_endTime'] -
-                                                CIIndex['cpu_build_startTime'])
-                    log_filename = "buildLog/%s_%s_%s_cpu.log" % (
-                        res['pipelineConfName'], self.sha, commit_createTime)
-                    EXCODE = self.getExcode(res['pipelineConfName'],
-                                            log_filename)
+                elif paddle_build_status == 'FAIL':
+                    waitTime_total = (basic_ci_index_dict['clone_code_startTime'] - commit_createTime) + (basic_ci_index_dict['docker_build_startTime'] - basic_ci_index_dict['clone_code_endTime']) + (basic_ci_index_dict['paddle_build_startTime'] - basic_ci_index_dict['docker_build_endTime'])
+                    execTime_total = (basic_ci_index_dict['clone_code_endTime'] - basic_ci_index_dict['clone_code_startTime']) + (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime']) + (basic_ci_index_dict['paddle_build_endTime']- basic_ci_index_dict['paddle_build_startTime'])
+                    log_filename = "buildLog/%s_%s_%s_cpu.log" % (res['pipelineConfName'], self.sha, commit_createTime)
+                    EXCODE = self.getExcode(res['pipelineConfName'], log_filename)
                 else:
-                    waitTime_total = (
-                        CIIndex['clone_code_startTime'] - commit_createTime
-                    ) + (CIIndex['docker_build_startTime'] -
-                         CIIndex['clone_code_endTime']) + (
-                             CIIndex['cpu_build_startTime'] -
-                             CIIndex['docker_build_endTime']) + (
-                                 CIIndex['gpu_test_startTime'] -
-                                 CIIndex['cpu_build_endTime'])
-                    execTime_total = (CIIndex['gpu_test_endTime'] -
-                                      CIIndex['gpu_test_startTime']) + (
-                                          CIIndex['cpu_build_endTime'] -
-                                          CIIndex['cpu_build_startTime']) + (
-                                              CIIndex['docker_build_endTime'] -
-                                              CIIndex['docker_build_startTime']
-                                          ) + (CIIndex['clone_code_endTime'] -
-                                               CIIndex['clone_code_startTime'])
-                    log_filename = "buildLog/%s_%s_%s_gpu.log" % (
-                        res['pipelineConfName'], self.sha, commit_createTime)
-                    EXCODE = self.getExcode(res['pipelineConfName'],
-                                            log_filename)
-            else:  #container ci
-                basic_ci_index_dict['docker_build_startTime'] = CIIndex[
-                    'docker_build_startTime']
-                basic_ci_index_dict['docker_build_endTime'] = CIIndex[
-                    'docker_build_endTime']
-                basic_ci_index_dict['paddle_build_startTime'] = CIIndex[
-                    'paddle_build_startTime']
-                basic_ci_index_dict['paddle_build_endTime'] = CIIndex[
-                    'paddle_build_endTime']
+                    ##gputest 执行时间选耗时长的 等待时间选等待最长的？？合理吗？
+                    gpu_waitTime = 0
+                    gpu_execTime = 0
+                    gpu_excode = []
+                    if len(testScope) == 0: ##只有编译任务，没有测试任务
+                        log_filename = "buildLog/%s_%s_%s_cpu.log" % (res['pipelineConfName'], self.sha, commit_createTime)
+                        EXCODE = self.getExcode(res['pipelineConfName'], log_filename)
+                        waitTime_total = (basic_ci_index_dict['clone_code_startTime'] - commit_createTime) + (basic_ci_index_dict['docker_build_startTime'] - basic_ci_index_dict['clone_code_endTime']) + (basic_ci_index_dict['paddle_build_startTime'] - basic_ci_index_dict['docker_build_endTime'])
+                        execTime_total = (basic_ci_index_dict['clone_code_endTime'] - basic_ci_index_dict['clone_code_startTime']) + (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime']) + (basic_ci_index_dict['paddle_build_endTime']- basic_ci_index_dict['paddle_build_startTime'])
+                    else:
+                        for test in testScope:
+                            test = test.replace('-', '_')
+                            gpu_waitTime_tem = basic_ci_index_dict['%s_startTime' %test] - basic_ci_index_dict['paddle_build_endTime']
+                            if gpu_waitTime_tem > gpu_waitTime:
+                                gpu_waitTime = gpu_waitTime_tem
+                            gpu_execTime_tem = basic_ci_index_dict['%s_endTime' %test] - basic_ci_index_dict['%s_startTime' %test]
+                            if gpu_execTime_tem > gpu_execTime:
+                                gpu_execTime = gpu_execTime_tem
+                            log_filename = "buildLog/%s_%s_%s_%s_gpu.log" %(res['pipelineConfName'], test.replace('-', '_'), self.sha, commit_createTime)
+                            if test == 'paddle_test' or len(testScope) == 1:
+                                EXCODE = self.getExcode(res['pipelineConfName'], log_filename)
+                            else:
+                                if test.split('_')[1] == 'infer':
+                                    EXCODE_infer = self.getExcode(res['pipelineConfName'], log_filename)
+                                    basic_ci_index_dict['EXCODE_infer'] = EXCODE_infer
+                        waitTime_total = (basic_ci_index_dict['clone_code_startTime'] - commit_createTime) + (basic_ci_index_dict['docker_build_startTime'] - basic_ci_index_dict['clone_code_endTime']) + (basic_ci_index_dict['paddle_build_startTime'] - basic_ci_index_dict['docker_build_endTime']) + gpu_waitTime
+                        execTime_total = (basic_ci_index_dict['clone_code_endTime'] - basic_ci_index_dict['clone_code_startTime']) + (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime']) + (basic_ci_index_dict['paddle_build_endTime']- basic_ci_index_dict['paddle_build_startTime']) + gpu_execTime
+            
+            else:
+                for stage in CIIndex:
+                    for job in CIIndex[stage]:
+                        if job == 'Git-clone':
+                            clone_code_status = CIIndex[stage][job]['status']
+                            basic_ci_index_dict['clone_code_startTime'] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['clone_code_endTime'] = CIIndex[stage][job]['endTime']
+                        elif job in ['构建镜像', 'build-docker-image']:
+                            build_docker_status = CIIndex[stage][job]['status']
+                            basic_ci_index_dict['docker_build_startTime'] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['docker_build_endTime'] = CIIndex[stage][job]['endTime']
+                        else:
+                            paddle_build_status = CIIndex[stage][job]['status']
+                            logUrl = CIIndex[stage][job]['logUrl']
+                            basic_ci_index_dict['paddle_build_startTime'] = CIIndex[stage][job]['startTime']
+                            basic_ci_index_dict['paddle_build_endTime'] = CIIndex[stage][job]['endTime']
                 if self.repo not in ['PaddlePaddle/Paddle']:
-                    waitTime_total = (
-                        CIIndex['docker_build_startTime'] - commit_createTime
-                    ) + (CIIndex['paddle_build_startTime'] -
-                         CIIndex['docker_build_endTime']) if CIIndex[
-                             'docker_build_status'] == 'SUCC' else CIIndex[
-                                 'docker_build_startTime'] - commit_createTime
-                    execTime_total = (
-                        CIIndex['paddle_build_endTime'] -
-                        CIIndex['paddle_build_startTime']) + (
-                            CIIndex['docker_build_endTime'] -
-                            CIIndex['docker_build_startTime']) if CIIndex[
-                                'docker_build_status'] == 'SUCC' else CIIndex[
-                                    'docker_build_endTime'] - CIIndex[
-                                        'docker_build_startTime']
-                    EXCODE = 0 if CIIndex[
-                        'paddle_build_status'] == 'SUCC' else 1
+                    waitTime_total = (basic_ci_index_dict['docker_build_startTime'] - commit_createTime) + (basic_ci_index_dict['paddle_build_startTime'] - basic_ci_index_dict['docker_build_endTime']) if build_docker_status == 'SUCC' else basic_ci_index_dict['docker_build_startTime'] - commit_createTime
+                    execTime_total = (basic_ci_index_dict['paddle_build_endTime'] - basic_ci_index_dict['paddle_build_startTime']) + (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime']) if build_docker_status == 'SUCC' else basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime']
+                    EXCODE = 0 if paddle_build_status == 'SUCC' else 1
                 else:
-                    if CIIndex['logUrl'] != None:
-                        self.getIpipeBuildLog(res['pipelineConfName'],
-                                              commit_createTime,
-                                              CIIndex['logUrl'])
-                    if 'clone_code_status' in CIIndex:
-                        basic_ci_index_dict['clone_code_startTime'] = CIIndex[
-                            'clone_code_startTime']
-                        basic_ci_index_dict['clone_code_endTime'] = CIIndex[
-                            'clone_code_endTime']
-                        if CIIndex['clone_code_status'] == 'FAIL':
-                            waitTime_total = CIIndex[
-                                'clone_code_startTime'] - commit_createTime
-                            execTime_total = CIIndex[
-                                'clone_code_endTime'] - CIIndex[
-                                    'clone_code_startTime']
-                            EXCODE = self.EXCODE_DICT['clone_code_failed']
-                    if CIIndex['docker_build_status'] == 'FAIL':
-                        waitTime_total = (
-                            CIIndex['clone_code_startTime'] - commit_createTime
-                        ) + (CIIndex['docker_build_startTime'] -
-                             CIIndex['clone_code_endTime']
-                             ) if 'clone_code_status' in CIIndex else CIIndex[
-                                 'docker_build_startTime'] - commit_createTime
-                        execTime_total = (
-                            CIIndex['clone_code_endTime'] -
-                            CIIndex['clone_code_startTime']) + (
-                                CIIndex['docker_build_endTime'] -
-                                CIIndex['docker_build_startTime']
-                            ) if 'clone_code_status' in CIIndex else CIIndex[
-                                'docker_build_endTime'] - CIIndex[
-                                    'docker_build_startTime']
+                    if logUrl != None:
+                        self.getIpipeBuildLog(res['pipelineConfName'], commit_createTime, logUrl)
+                    if clone_code_status == 'FAIL':
+                        waitTime_total = basic_ci_index_dict['clone_code_startTime'] - commit_createTime
+                        execTime_total = basic_ci_index_dict['clone_code_endTime'] - basic_ci_index_dict['clone_code_startTime']
+                        EXCODE = self.EXCODE_DICT['clone_code_failed']
+                    elif build_docker_status == 'FAIL':
+                        waitTime_total = (basic_ci_index_dict['clone_code_startTime'] - commit_createTime) + (basic_ci_index_dict['docker_build_startTime'] - basic_ci_index_dict['clone_code_endTime'])
+                        execTime_total = (basic_ci_index_dict['clone_code_endTime'] - basic_ci_index_dict['clone_code_startTime']) + (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime'])
                         EXCODE = self.EXCODE_DICT['docker_build_failed']
                     else:
-                        waitTime_total = (
-                            CIIndex['clone_code_startTime'] - commit_createTime
-                        ) + (CIIndex['docker_build_startTime'] -
-                             CIIndex['clone_code_endTime']
-                             ) + (CIIndex['paddle_build_startTime'] -
-                                  CIIndex['docker_build_endTime']
-                                  ) if 'clone_code_status' in CIIndex else (
-                                      CIIndex['docker_build_startTime'] -
-                                      commit_createTime) + (
-                                          CIIndex['paddle_build_startTime'] -
-                                          CIIndex['docker_build_endTime'])
-                        execTime_total = (
-                            CIIndex['paddle_build_endTime'] -
-                            CIIndex['paddle_build_startTime']) + (
-                                CIIndex['docker_build_endTime'] -
-                                CIIndex['docker_build_startTime']) + (
-                                    CIIndex['clone_code_endTime'] -
-                                    CIIndex['clone_code_startTime']
-                                ) if 'clone_code_status' in CIIndex else (
-                                    CIIndex['docker_build_endTime'] -
-                                    CIIndex['docker_build_startTime']) + (
-                                        CIIndex['paddle_build_endTime'] -
-                                        CIIndex['paddle_build_startTime'])
-                        log_filename = "buildLog/%s_%s_%s.log" % (
-                            res['pipelineConfName'], self.sha,
-                            commit_createTime)
-                        EXCODE = self.getExcode(res['pipelineConfName'],
-                                                log_filename)
+                        waitTime_total = (basic_ci_index_dict['clone_code_startTime'] - commit_createTime) + (basic_ci_index_dict['docker_build_startTime'] - basic_ci_index_dict['clone_code_endTime']) + (basic_ci_index_dict['paddle_build_startTime'] - basic_ci_index_dict['docker_build_endTime']) if 'clone_code_startTime' in basic_ci_index_dict else (basic_ci_index_dict['docker_build_startTime'] - commit_createTime) + (basic_ci_index_dict['paddle_build_startTime'] - basic_ci_index_dict['docker_build_endTime'])
+                        execTime_total = (basic_ci_index_dict['paddle_build_endTime'] - basic_ci_index_dict['paddle_build_startTime']) + (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime']) + (basic_ci_index_dict['clone_code_endTime'] -  basic_ci_index_dict['clone_code_startTime']) if 'clone_code_startTime' in basic_ci_index_dict else (basic_ci_index_dict['docker_build_endTime'] - basic_ci_index_dict['docker_build_startTime']) + (basic_ci_index_dict['paddle_build_endTime'] - basic_ci_index_dict['paddle_build_startTime'])
+                        log_filename = "buildLog/%s_%s_%s.log" % (res['pipelineConfName'], self.sha, commit_createTime)
+                        EXCODE = self.getExcode(res['pipelineConfName'], log_filename)
             basic_ci_index_dict['EXCODE'] = EXCODE
             basic_ci_index_dict['waitTime_total'] = waitTime_total
             basic_ci_index_dict['execTime_total'] = execTime_total
-            print(basic_ci_index_dict)
-            logger.info("basic_ci_index_dict: %s" % basic_ci_index_dict)
+            logger.info("basic_ci_index_dict: %s" %basic_ci_index_dict)
             return basic_ci_index_dict
-
+    
     def getExcode(self, pipelineConfName, log_filename):
         """获取退出码"""
         f = open('%s' % log_filename, 'r')
@@ -568,60 +559,63 @@ class analysisBuildLog(object):
         detailed_ci_index_dict['PR'] = int(basic_ci_index['PR'])
         detailed_ci_index_dict['EXCODE'] = EXCODE
         detailed_ci_index_dict['triggerUser'] = basic_ci_index['triggerUser']
-        detailed_ci_index_dict['createTime'] = basic_ci_index[
-            'commit_createTime']
+        detailed_ci_index_dict['createTime'] = basic_ci_index['commit_createTime']
         detailed_ci_index_dict['branch'] = basic_ci_index['branch']
         detailed_ci_index_dict['repo'] = basic_ci_index['repo']
-        detailed_ci_index_dict['execTime_total'] = basic_ci_index[
-            'execTime_total']
-        detailed_ci_index_dict['waitTime_total'] = basic_ci_index[
-            'waitTime_total']
+        detailed_ci_index_dict['execTime_total'] = basic_ci_index['execTime_total']
+        detailed_ci_index_dict['waitTime_total'] = basic_ci_index['waitTime_total']
         #detailed_ci_index_dict['endTime'] = basic_ci_index['paddle_build_endTime'] if 'paddle_build_endTime' in basic_ci_index else basic_ci_index['docker_build_endTime']
         detailed_ci_index_dict['documentfix'] = basic_ci_index['documentfix']
-        self.analyze_failed_cause(basic_ci_index)  #分析PR失败原因
-        #analyze_failed_cause(detailed_ci_index_dict, self.target_url) #分析PR失败原因
-        if ciName.startswith(
-            ('PR-CI-APPROVAL', 'PR-CI-OP-benchmark',
-             'PR-CI-Model-benchmark')) or EXCODE in [1, 2, 7, 64, 503]:
+
+        analysis_ci_index = self.analyze_failed_cause(basic_ci_index) #分析PR失败原因
+        if ciName.startswith(('PR-CI-APPROVAL', 'PR-CI-OP-benchmark', 'PR-CI-Model-benchmark')) or EXCODE in [1, 2, 7, 64, 503]:
             pass
         else:
-            if ciName.startswith(self.Paddle_cpu_gpu_separate_ci_tuple):
-                filename = '%s_%s_%s_cpu.log' % (
-                    ciName, commitId, basic_ci_index['commit_createTime'])
+            ### buildTime/ccache/whlSize/buildSize
+            if ciName.startswith(('PR-CI-Build')):
+               filename = '%s_%s_%s_cpu.log' % (ciName, commitId, basic_ci_index['commit_createTime'])
+            elif ciName.startswith(self.Paddle_cpu_gpu_separate_ci_tuple):
+                filename = '%s_%s_%s_cpu.log' % (ciName, commitId, basic_ci_index['commit_createTime'])
             else:
-                filename = '%s_%s_%s.log' % (
-                    ciName, commitId, basic_ci_index['commit_createTime'])
+                filename = '%s_%s_%s.log' % (ciName, commitId, basic_ci_index['commit_createTime'])
             f = open('buildLog/%s' % filename, 'r')
             data = f.read()
             buildTime_strlist = data.split('Build Time:', 1)
             buildTime = buildTime_strlist[1:][0].split('s')[0].strip()
             detailed_ci_index_dict['buildTime'] = float(buildTime)
             #收集ccache
-            if ciName in [
-                    'PR-CI-Coverage', 'PR-CI-Py3', 'PR-CI-CPU-Py2',
-                    'PR-CI-Inference', 'PR-CI-Mac', 'PR-CI-Mac-Python3'
-            ]:
+            if ciName in ['PR-CI-Coverage', 'PR-CI-Py3', 'PR-CI-CPU-Py2', 'PR-CI-Inference', 'PR-CI-Mac-Python3', 'PR-CI-Build']:
                 ccacheRate_strlist = data.split('ccache hit rate:', 1)
                 ccacheRate = ccacheRate_strlist[1:][0].split('%')[0].strip()
                 detailed_ci_index_dict['ccacheRate'] = float(ccacheRate)
+            if ciName in ['PR-CI-Windows']:
+                ccacheRate_strlist = data.split('ipipe_log_param_sccache_Hit_Hate:', 1)
+                ccacheRate = ccacheRate_strlist[1:][0].split('%')[0].strip()
+                detailed_ci_index_dict['ccacheRate'] = float(ccacheRate)
+            #infenece
             if filename.startswith('PR-CI-Inference'):
-                fluidInferenceSize_strlist = data.split(
-                    'Paddle_Inference Size:', 1)
-                fluidInferenceSize = fluidInferenceSize_strlist[1:][0].split(
-                    'M')[0].strip()
-                detailed_ci_index_dict['fluidInferenceSize'] = float(
-                    fluidInferenceSize)
-                testFluidLibTime_strlist = data.split(
-                    'test_fluid_lib Total Time:', 1)
-                testFluidLibTime = testFluidLibTime_strlist[1:][0].split('s')[
-                    0].strip()
-                detailed_ci_index_dict['testFluidLibTime'] = float(
-                    testFluidLibTime)
-                #testFluidLibTrainTime_strlist = data.split('test_fluid_lib_train Total Time:', 1)
-                #testFluidLibTrainTime = testFluidLibTrainTime_strlist[1:][0].split('s')[0].strip()
-                #index_dict['testFluidLibTrainTime'] = float(testFluidLibTrainTime)
-            elif filename.startswith('PR-CI-Coverage') or filename.startswith(
-                    'PR-CI-Py3') or filename.startswith('PR-CI-CPU-Py2'):
+                fluidInferenceSize_strlist = data.split('Paddle_Inference Size:', 1)
+                fluidInferenceSize = fluidInferenceSize_strlist[1:][0].split('M')[0].strip()
+                fluidInferenceSize_so_strlist = data.split('ipipe_log_param_Paddle_Inference_So_Size:', 1)
+                fluidInferenceSize_so = fluidInferenceSize_so_strlist[1:][0].split('M')[0].strip()
+                detailed_ci_index_dict['fluidInferenceSize_so'] = float(fluidInferenceSize_so)
+                f.close()
+                filename = '%s_paddle_test_%s_%s_gpu.log' % (ciName, commitId, basic_ci_index['commit_createTime'])
+                f = open('buildLog/%s' % filename, 'r')
+                data = f.read()
+                detailed_ci_index_dict['fluidInferenceSize'] = float(fluidInferenceSize)
+                testFluidLibTime_strlist = data.split('infer_ut tests Total time:', 1)
+                testFluidLibTime = testFluidLibTime_strlist[1:][0].split('s')[0].strip()
+                detailed_ci_index_dict['testFluidLibTime'] = float(testFluidLibTime)
+
+            #Mac
+            elif filename.startswith('PR-CI-Mac-Python3'):
+                testCaseTime_mac_strlist = data.split('Mac testCase Time:')
+                testCaseTime_mac = int(testCaseTime_mac_strlist[1:][0].split('s')[0].strip())
+                detailed_ci_index_dict['testCaseTime_total'] = testCaseTime_mac
+
+            # Coverage/Py3/CPU-Py2/PR-CI-Build
+            elif filename.startswith(('PR-CI-Coverage', 'PR-CI-Build', 'PR-CI-Py3', 'PR-CI-CPU-Py2')):
                 buildSize_strlist = data.split('Build Size:', 1)
                 buildSize = buildSize_strlist[1:][0].split('G')[0].strip()
                 detailed_ci_index_dict['buildSize'] = float(buildSize)
@@ -629,143 +623,88 @@ class analysisBuildLog(object):
                 if filename.startswith('PR-CI-Coverage'):
                     if 'G' in WhlSize_strlist[1:][0].split('\n')[0]:
                         WhlSize = WhlSize_strlist[1:][0].split('G')[0].strip()
-                        WhlSize = float(WhlSize) * 1024
+                        WhlSize = float(WhlSize)* 1024
                     else:
                         WhlSize = WhlSize_strlist[1:][0].split('M')[0].strip()
                 else:
                     WhlSize = WhlSize_strlist[1:][0].split('M')[0].strip()
                 detailed_ci_index_dict['WhlSize'] = float(WhlSize)
-                if filename.startswith(
-                        'PR-CI-Coverage') or filename.startswith('PR-CI-Py3'):
-                    if ciName.startswith(
-                            self.Paddle_cpu_gpu_separate_ci_tuple):
-                        filename = '%s_%s_%s_gpu.log' % (
-                            ciName, commitId,
-                            basic_ci_index['commit_createTime'])
-                        f = open('buildLog/%s' % filename, 'r')
-                        data = f.read()
-                    if 'in PRECISION_TEST' in data:  #命中精致测试 只拿testCaseTime_total
-                        detailed_ci_index_dict['PRECISION_TEST'] = True
-                        testCaseTime_total_strlist = data.split(
-                            'TestCases Total Time:')
+
+                #精准测试
+                if filename.startswith(self.PRECISION_TEST_CI_tuple):
+                    f.close()
+                    filename = '%s_paddle_test_%s_%s_gpu.log' % (ciName, commitId, basic_ci_index['commit_createTime'])
+                    f = open('buildLog/%s' % filename, 'r')
+                    data = f.read()
+                    detailed_ci_index_dict['PRECISION_TEST'] = True if analysis_ci_index['PRECISION_TEST'] == 'true' else False
+                    if detailed_ci_index_dict['PRECISION_TEST'] == 'true': #命中精致测试 只拿testCaseTime_total
+                        testCaseTime_total_strlist = data.split('TestCases Total Time:')
                         testCaseTime_total = 0
                         if detailed_ci_index_dict['EXCODE'] == 8:
                             for item in testCaseTime_total_strlist[1:]:
-                                testCaseTime_total += int(
-                                    item.split('s')[0].strip())
+                                testCaseTime_total += int(item.split('s')[0].strip())
                         else:
                             for item in testCaseTime_total_strlist[1:]:
-                                testCaseTime_total = int(
-                                    item.split('s')[0].strip()
-                                ) if int(item.split('s')[0].strip(
-                                )) > testCaseTime_total else testCaseTime_total
-                        detailed_ci_index_dict[
-                            'testCaseTime_total'] = testCaseTime_total
+                                testCaseTime_total = int(item.split('s')[0].strip()) if int(item.split('s')[0].strip()) > testCaseTime_total else testCaseTime_total
+                        detailed_ci_index_dict['testCaseTime_total'] = testCaseTime_total
                     else:
-                        detailed_ci_index_dict['PRECISION_TEST'] = False
-                        testCaseCount_single_strlist = data.split(
-                            '1 card TestCases count is')
+                        testCaseCount_single_strlist = data.split('1 card TestCases count is')
                         testCaseCount_single = 0
-                        for item in testCaseCount_single_strlist[
-                                1:]:  #原因是单卡的case分了两部分
-                            testCaseCount_single += int(
-                                item.split('\n')[0].strip())
-                        detailed_ci_index_dict[
-                            'testCaseCount_single'] = testCaseCount_single
-                        testCaseCount_multi_strlist = data.split(
-                            '2 card TestCases count is')
-                        testCaseCount_multi = int(testCaseCount_multi_strlist[
-                            1:][0].split('\n')[0].strip())
-                        detailed_ci_index_dict[
-                            'testCaseCount_multi'] = testCaseCount_multi
-                        testCaseCount_exclusive_strlist = data.split(
-                            'exclusive TestCases count is')
-                        testCaseCount_exclusive = int(
-                            testCaseCount_exclusive_strlist[1:][0].split('\n')[
-                                0].strip())
-                        detailed_ci_index_dict[
-                            'testCaseCount_exclusive'] = testCaseCount_exclusive
+                        for item in testCaseCount_single_strlist[1:]:  #原因是单卡的case分了两部分
+                            testCaseCount_single += int(item.split('\n')[0].strip())
+                        detailed_ci_index_dict['testCaseCount_single'] = testCaseCount_single
+                        testCaseCount_multi_strlist = data.split('2 card TestCases count is')
+                        testCaseCount_multi = int(testCaseCount_multi_strlist[1:][0].split('\n')[0].strip())
+                        detailed_ci_index_dict['testCaseCount_multi'] = testCaseCount_multi
+                        testCaseCount_exclusive_strlist = data.split('exclusive TestCases count is')
+                        testCaseCount_exclusive = int(testCaseCount_exclusive_strlist[1:][0].split('\n')[0].strip())
+                        detailed_ci_index_dict['testCaseCount_exclusive'] = testCaseCount_exclusive
                         testCaseCount_total = testCaseCount_single + testCaseCount_multi + testCaseCount_exclusive
-                        detailed_ci_index_dict[
-                            'testCaseCount_total'] = testCaseCount_total
-                        testCaseTime_single_strlist = data.split(
-                            '1 card TestCases Total Time:')
+                        detailed_ci_index_dict['testCaseCount_total'] = testCaseCount_total
+                        testCaseTime_single_strlist = data.split('1 card TestCases Total Time:')
                         testCaseTime_single = 0
-                        for item in testCaseTime_single_strlist[
-                                1:]:  #原因是单卡的case分了两部分
-                            testCaseTime_single += int(
-                                item.split('s')[0].strip())
-                        detailed_ci_index_dict[
-                            'testCaseTime_single'] = testCaseTime_single
-                        testCaseTime_multi_strlist = data.split(
-                            '2 card TestCases Total Time:')
-                        testCaseTime_multi = int(testCaseTime_multi_strlist[1:]
-                                                 [0].split('s')[0].strip())
-                        detailed_ci_index_dict[
-                            'testCaseTime_multi'] = testCaseTime_multi
-                        testCaseTime_exclusive_strlist = data.split(
-                            'exclusive TestCases Total Time:')
-                        testCaseTime_exclusive = int(
-                            testCaseTime_exclusive_strlist[1:][0].split('s')[
-                                0].strip())
-                        detailed_ci_index_dict[
-                            'testCaseTime_exclusive'] = testCaseTime_exclusive
+                        for item in testCaseTime_single_strlist[1:]:  #原因是单卡的case分了两部分
+                            testCaseTime_single += int(item.split('s')[0].strip())
+                        detailed_ci_index_dict['testCaseTime_single'] = testCaseTime_single
+                        testCaseTime_multi_strlist = data.split('2 card TestCases Total Time:')
+                        testCaseTime_multi = 0
+                        for item in testCaseTime_multi_strlist[1:]:
+                            testCaseTime_multi += int(item.split('s')[0].strip())
+                        detailed_ci_index_dict['testCaseTime_multi'] = testCaseTime_multi
+                        testCaseTime_exclusive_strlist = data.split('exclusive TestCases Total Time:')
+                        testCaseTime_exclusive = 0
+                        for item in testCaseTime_exclusive_strlist[1:]:
+                            testCaseTime_exclusive += int(item.split('s')[0].strip())
+                        detailed_ci_index_dict['testCaseTime_exclusive'] = testCaseTime_exclusive
                         if detailed_ci_index_dict['EXCODE'] == 8:
-                            testCaseTime_total = detailed_ci_index_dict[
-                                'testCaseTime_single'] + detailed_ci_index_dict[
-                                    'testCaseTime_multi'] + detailed_ci_index_dict[
-                                        'testCaseTime_exclusive']
+                            testCaseTime_total = detailed_ci_index_dict['testCaseTime_single'] + detailed_ci_index_dict['testCaseTime_multi'] + detailed_ci_index_dict['testCaseTime_exclusive']
                         else:
-                            testCaseTime_total_strlist = data.split(
-                                'TestCases Total Time:')
+                            testCaseTime_total_strlist = data.split('TestCases Total Time:')
                             testCaseTime_total = 0
                             for item in testCaseTime_total_strlist[1:]:
-                                testCaseTime_total = int(
-                                    item.split('s')[0].strip()
-                                ) if int(item.split('s')[0].strip(
-                                )) > testCaseTime_total else testCaseTime_total
-                        detailed_ci_index_dict[
-                            'testCaseTime_total'] = testCaseTime_total
-            elif filename.startswith('PR-CI-Mac'):
-                testCaseTime_mac_strlist = data.split('Mac testCase Time:')
-                testCaseTime_mac = int(testCaseTime_mac_strlist[1:][0].split(
-                    's')[0].strip())
-                detailed_ci_index_dict['testCaseTime_total'] = testCaseTime_mac
-            elif filename.startswith('PR-CI-Windows'):
-                fluidInferenceSize_strlist = data.split(
-                    'Windows Paddle_Inference Size:', 1)
-                fluidInferenceSize = fluidInferenceSize_strlist[1].split('M')[
-                    0].strip()
-                detailed_ci_index_dict['fluidInferenceSize'] = float(
-                    fluidInferenceSize)
+                                testCaseTime_total = int(item.split('s')[0].strip()) if int(item.split('s')[0].strip()) > testCaseTime_total else testCaseTime_total
+                        detailed_ci_index_dict['testCaseTime_total'] = testCaseTime_total
+
+            elif filename.startswith('PR-CI-Windows') and not filename.startswith('PR-CI-Windows-OPENBLAS'):
+                detailed_ci_index_dict['PRECISION_TEST'] = True if analysis_ci_index['PRECISION_TEST'] == 'true' else False
+                #fluidInferenceSize_strlist = data.split('Windows Paddle_Inference Size:', 1)
+                #fluidInferenceSize = fluidInferenceSize_strlist[1].split('M')[0].strip()
+                #detailed_ci_index_dict['fluidInferenceSize'] = float(fluidInferenceSize)
                 WhlSize_strlist = data.split('PR whl Size:', 1)
                 WhlSize = WhlSize_strlist[1].split('M')[0].strip()
                 detailed_ci_index_dict['WhlSize'] = float(WhlSize)
-                testCaseTime_single_strlist = data.split(
-                    'Windows 1 card TestCases Total Time:')
-                testCaseTime_single = int(testCaseTime_single_strlist[1:][0]
-                                          .split('s')[0].strip())
-                detailed_ci_index_dict[
-                    'testCaseTime_single'] = testCaseTime_single
-                testCaseTime_win_strlist = data.split(
-                    'Windows TestCases Total Time:')
-                testCaseTime_win = int(testCaseTime_win_strlist[1:][0].split(
-                    's')[0].strip())
+                testCaseTime_single_strlist = data.split('Windows 1 card TestCases Total Time:')
+                testCaseTime_single = int(testCaseTime_single_strlist[1:][0].split('s')[0].strip())
+                detailed_ci_index_dict['testCaseTime_single'] = testCaseTime_single
+                testCaseTime_win_strlist = data.split('Windows TestCases Total Time:')
+                testCaseTime_win = int(testCaseTime_win_strlist[1:][0].split('s')[0].strip())
                 detailed_ci_index_dict['testCaseTime_total'] = testCaseTime_win
-                if ciName in ['PR-CI-Windows', 'PR-CI-Windows-OPENBLAS']:
-                    buildCache_strlist = data.split(
-                        'ipipe_log_param_Windows_Build_Cache: ', 2)
-                    buildCache = 1 if buildCache_strlist[1:][0].split('\n')[
-                        0].strip() == 'TRUE' else 0
-                    detailed_ci_index_dict['buildCache'] = int(buildCache)
-                print(detailed_ci_index_dict)
-                '''
+
                 testCaseCount_single_strlist = data.split('Windows 1 card TestCases count is')
                 testCaseCount_single = int(testCaseCount_single_strlist[-1].split('\n')[0].strip())
                 detailed_ci_index_dict['testCaseCount_single'] = testCaseCount_single
                 testCaseCount_total = testCaseCount_single
                 detailed_ci_index_dict['testCaseCount_total'] = testCaseCount_total
-                '''
 
             f.close()
         return detailed_ci_index_dict
@@ -1121,8 +1060,7 @@ class analysisBuildLog(object):
                                 ut, pr, commit, ciname, ciurl)
             HTML_CONTENT = HTML_CONTENT + TABLE_CONTENT + "</tbody> </table> </body></html> "
             receiver = [
-                'zhangchunle@baidu.com', 'tianshuo03@baidu.com',
-                'v_duchun@baidu.com', 'xieyunshen@baidu.com',
+                'zhangchunle@baidu.com', 'tianshuo03@baidu.com', 'xieyunshen@baidu.com',
                 'liuxudong04@baidu.com', 'luotao02@baidu.com'
             ]
             title = '[告警] CI单测挂了三次以上！'
