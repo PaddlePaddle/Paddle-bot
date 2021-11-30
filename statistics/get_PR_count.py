@@ -21,7 +21,7 @@ def getPersonnel(user):
     """
     判断是否为内部员工
     """
-    personnel_api = ''
+    personnel_api = 'http://xxxx:8091/v1/user/person_info'
     # 部门员工信息平台api--->按名字查询
     isname = requests.get(personnel_api + '?github_name=' + user).json()
     # 部门员工信息平台api--->按ID查询
@@ -92,7 +92,7 @@ def get_info(url, headers, page_num, date):
                             user_dict[email][3] += 1
                             user_dict[email][4] += pr_res['additions']
                             user_dict[email][5] += pr_res['deletions']
-    print(user_dict)
+
     df = pd.DataFrame(
         user_dict.values(),
         columns=['name', 'email', 'team', 'PR数量', 'additions', 'deletions'])
@@ -106,15 +106,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--date', help='年-月', default='2021-07')
+    parser.add_argument('--date', help='年-月', default='2021-08')
     args = parser.parse_args()
     url = 'https://api.github.com/repos/PaddlePaddle/Paddle/pulls?state=closed&per_page=100'
     headers = {
         'User-Agent': 'Mozilla/5.0',
-        'Authorization': 'token i',
+        'Authorization': 'token ghp_xxxx',
         'Content-Type': 'application/json',
         'Accept': 'application/json'
     }
-
     page_num = get_page(url, headers)
     res = get_info(url, headers, page_num, args.date)

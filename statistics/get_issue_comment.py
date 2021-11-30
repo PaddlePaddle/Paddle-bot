@@ -21,7 +21,7 @@ def getPersonnel(user):
     """
     获取员工相关信息
     """
-    personnel_api = ''
+    personnel_api = 'http://xxx:8091/v1/user/person_info'
     # 部门员工信息平台api--->按名字查询
     isname = requests.get(personnel_api + '?github_name=' + user).json()
     # 部门员工信息平台api--->按ID查询
@@ -105,7 +105,7 @@ def get_comment(headers, number_list, date):
             user_dict[num].values(),
             columns=['num', 'user', 'email', 'team', 'state', 'count'])
         result_df = result_df.append(df)
-    file_path = pd.ExcelWriter('./pr_datas/%s_issue_comments.xlsx' % date)
+    file_path = pd.ExcelWriter('%s_issue_comments.xlsx' % date)
     result_df.fillna(' ', inplace=True)
     result_df.to_excel(
         file_path, encoding='utf-8', index=False, sheet_name="Issue")
@@ -117,16 +117,15 @@ if __name__ == '__main__':
     url = 'https://api.github.com/repos/PaddlePaddle/Paddle/issues?per_page=100&state=all'
     headers = {
         'User-Agent': 'Mozilla/5.0',
-        'Authorization': 'token ',
+        'Authorization': 'token ghp_xxx',
         'Content-Type': 'application/json',
         'Accept': 'application/json'
     }
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--date', help='年-月', default='2021-07')
+    parser.add_argument('--date', help='年-月', default='2021-08')
     args = parser.parse_args()
     page_num = get_page(url, headers)
     number_list = get_number(url, headers, page_num, args.date)
     user_dict = get_comment(headers, number_list, args.date)
-    print(user_dict)
