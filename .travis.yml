@@ -2,3 +2,5 @@ language: python
 sudo: required
 script:
   - bash scripts/check_code.sh check_code_style
+---
+
