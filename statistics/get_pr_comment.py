@@ -1,3 +1,4 @@
+# coding=UTF-8
 import pandas as pd
 import datetime
 import requests
@@ -21,7 +22,7 @@ def getPersonnel(user):
     """
     获取员工相关信息
     """
-    personnel_api = ''
+    personnel_api = 'http://sz-cpu-agent01.bcc-szth.baidu.com:8091/v1/user/person_info'
     # 部门员工信息平台api--->按名字查询
     isname = requests.get(personnel_api + '?github_name=' + user).json()
     # 部门员工信息平台api--->按ID查询
@@ -30,7 +31,8 @@ def getPersonnel(user):
         return [isname[0]['name'], isname[0]['email'], isname[0]['team']]
     elif isID:
         return [isID[0]['name'], isID[0]['email'], isID[0]['team']]
-    return False
+    else:
+        return False
 
 
 def get_page(url, headers):
@@ -102,13 +104,18 @@ def get_comment(headers, number_list, date):
                     user = user_info[0]
                     email = user_info[1]
                     team = user_info[2]
-                if email not in user_dict[number].keys():
+                else:
+                    user = info['user']['login']
+                    email = None
+                    team = None
+                if 'email' not in user_dict[number].keys():
                     user_dict[number][email] = [
                         number, user, email, team, number_list[number][1], 1,
                         auther, auther_email, auther_team
                     ]
                 else:
                     user_dict[number][email][5] += 1
+
     result_df = pd.DataFrame()
     for num in user_dict.keys():
         df = pd.DataFrame(
@@ -118,7 +125,7 @@ def get_comment(headers, number_list, date):
                 'auther_email', 'auther_team'
             ])
         result_df = result_df.append(df)
-    file_path = pd.ExcelWriter('./pr_datas/%s_pr_comments.xlsx' % date)
+    file_path = pd.ExcelWriter('%s_pr_comments.xlsx' % date)
     result_df.fillna(' ', inplace=True)
     result_df.to_excel(
         file_path, encoding='utf-8', index=False, sheet_name="PR")
@@ -130,16 +137,15 @@ if __name__ == '__main__':
     url = 'https://api.github.com/repos/PaddlePaddle/Paddle/pulls?per_page=100&state=all'
     headers = {
         'User-Agent': 'Mozilla/5.0',
-        'Authorization': 'token ',
+        'Authorization': 'token ghp_xxx',
         'Content-Type': 'application/json',
         'Accept': 'application/json'
     }
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--date', help='年-月', default='2021-07')
+    parser.add_argument('--date', help='年-月', default='2021-08')
     args = parser.parse_args()
     page_num = get_page(url, headers)
     number_list = get_number(url, headers, page_num, args.date)
     user_dict = get_comment(headers, number_list, args.date)
-    print(user_dict)
