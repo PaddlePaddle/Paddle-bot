@@ -22,7 +22,7 @@ def getPersonnel(user):
     """
     获取员工相关信息
     """
-    personnel_api = 'http://sz-cpu-agent01.bcc-szth.baidu.com:8091/v1/user/person_info'
+    personnel_api = 'http://xxx:8091/v1/user/person_info'
     # 部门员工信息平台api--->按名字查询
     isname = requests.get(personnel_api + '?github_name=' + user).json()
     # 部门员工信息平台api--->按ID查询
