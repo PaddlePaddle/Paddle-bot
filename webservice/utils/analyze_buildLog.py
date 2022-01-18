@@ -233,6 +233,7 @@ class analysisBuildLog(object):
         SaCIIndex = {}
         jobExecTime = 0
         for stage in stageBuildBeans:
+            stageName = stage['stageName']
             jobGroupBuildBeans = stage['jobGroupBuildBeans'][0]
             for job in jobGroupBuildBeans:
                 if job['jobName'] == 'Git-clone':
@@ -245,7 +246,20 @@ class analysisBuildLog(object):
                     SaCIIndex['clone_code_status'] = clone_code_status
                     SaCIIndex['clone_code_startTime'] = clone_code_startTime
                     SaCIIndex['clone_code_endTime'] = clone_code_endTime
-                else:
+                elif job['jobName'] == 'paddle-build' and stageName in [
+                        'PR-CI-NPU'
+                ]:  #cpu/gpu separte
+                    SaCIIndex['paddle_build_status'] = job['status']
+                    SaCIIndex['paddle_build_startTime'] = int(
+                        str(job['realJobBuild']['startTime'])[:-3]) if job[
+                            'status'] != 'WAITTING' else 0
+                    SaCIIndex['paddle_build_endTime'] = int(
+                        str(job['realJobBuild']['endTime'])[:-3]) if job[
+                            'status'] != 'WAITTING' else 0
+                    SaCIIndex['paddle_build_logUrl'] = localConfig.cf.get(
+                        'ipipeConf', 'log_url') + job['realJobBuild'][
+                            'logUrl'] if job['status'] != 'WAITTING' else None
+                elif job['jobName'] not in ['构建镜像', 'build-docker-image']:
                     job_status = job['status']
                     job_startTime = int(
                         str(job['realJobBuild']['shellBuild']['startTime'])
@@ -364,6 +378,27 @@ class analysisBuildLog(object):
                         'job_endTime']
                     if CIIndex['clone_code_status'] == 'FAIL':
                         EXCODE = self.EXCODE_DICT['clone_code_failed']
+                        basic_ci_index_dict['EXCODE'] = EXCODE
+                        return basic_ci_index_dict
+                elif 'paddle_build_status' in CIIndex:
+                    waitTime_total = (CIIndex['paddle_build_startTime'] -
+                                      commit_createTime) + (
+                                          CIIndex['job_startTime'] -
+                                          CIIndex['paddle_build_endTime'])
+                    execTime_total = (CIIndex['jobExecTime']
+                                      ) + (CIIndex['paddle_build_endTime'] -
+                                           CIIndex['paddle_build_startTime'])
+                    basic_ci_index_dict['paddle_build_startTime'] = CIIndex[
+                        'paddle_build_startTime']
+                    basic_ci_index_dict['paddle_build_endTime'] = CIIndex[
+                        'paddle_build_endTime']
+                    if CIIndex['paddle_build_status'] == 'SUCC':
+                        basic_ci_index_dict['paddle_test_startTime'] = CIIndex[
+                            'job_startTime']
+                        basic_ci_index_dict['paddle_test_endTime'] = CIIndex[
+                            'job_endTime']
+                    if CIIndex['paddle_build_status'] == 'FAIL':
+                        EXCODE = self.EXCODE_DICT['build_failed']
                         basic_ci_index_dict['EXCODE'] = EXCODE
                         return basic_ci_index_dict
                 else:
