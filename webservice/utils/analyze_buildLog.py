@@ -131,6 +131,7 @@ class analysisBuildLog(object):
 
     def getContainerCIIndex(self, stageBuildBeans):
         ContainerCIIndex = {}
+        isRebuild_list = []
         for stage in stageBuildBeans:
             stageName = stage['stageName']
             jobGroupBuildBeans = stage['jobGroupBuildBeans'][0]
@@ -227,11 +228,18 @@ class analysisBuildLog(object):
                         ContainerCIIndex[
                             'paddle_build_endTime'] = paddle_build_endTime
                         ContainerCIIndex['logUrl'] = logUrl
+                    isRebuild = job['isRebuild']
+                    isRebuild_list.append(isRebuild)
+        if True in isRebuild_list:
+            ContainerCIIndex['isRebuild'] = 1
+        else:
+            ContainerCIIndex['isRebuild'] = 0
         return ContainerCIIndex
 
     def getSaCIIndex(self, stageBuildBeans):
         SaCIIndex = {}
         jobExecTime = 0
+        isRebuild_list = []
         for stage in stageBuildBeans:
             stageName = stage['stageName']
             jobGroupBuildBeans = stage['jobGroupBuildBeans'][0]
@@ -270,16 +278,22 @@ class analysisBuildLog(object):
                     jobExecTime = jobExecTime + (job_endTime - job_startTime)
                     taskid = job['realJobBuild']['shellBuild']['taskId']
                     logUrl = "https://xly.bce.baidu.com/paddlepaddle/paddle-ci/sa_log/log/download/%s" % taskid
-
+                isRebuild = job['isRebuild']
+                isRebuild_list.append(isRebuild)
         SaCIIndex['job_startTime'] = job_startTime
         SaCIIndex['job_endTime'] = job_endTime
         SaCIIndex['jobExecTime'] = jobExecTime
         SaCIIndex['logUrl'] = logUrl
         SaCIIndex['job_status'] = job_status
+        if True in isRebuild_list:
+            SaCIIndex['isRebuild'] = 1
+        else:
+            SaCIIndex['isRebuild'] = 0
         return SaCIIndex
 
     def getBuildParallelCIIndex(self, stageBuildBeans):
         BuildParallelCIIndex = {}
+        isRebuild_list = []
         for stage in stageBuildBeans:
             stageName = stage['stageName']
             BuildParallelCIIndex[stageName] = {}
@@ -314,6 +328,12 @@ class analysisBuildLog(object):
                                 'ipipeConf', 'log_url') + job['realJobBuild'][
                                     'logUrl'] if job[
                                         'status'] != 'WAITTING' else None
+                    isRebuild = job['isRebuild']
+                    isRebuild_list.append(isRebuild)
+        if True in isRebuild_list:
+            BuildParallelCIIndex['isRebuild'] = 1
+        else:
+            BuildParallelCIIndex['isRebuild'] = 0
         return BuildParallelCIIndex
 
     def getBasicCIIndex(self, ciName):
@@ -360,6 +380,7 @@ class analysisBuildLog(object):
                     CIIndex = self.getSaCIIndex(stageBuildBeans)
             testScope = []
             if 'jobExecTime' in CIIndex:  #sa任务
+                basic_ci_index_dict['isRebuild'] = CIIndex['isRebuild']
                 if 'clone_code_status' in CIIndex:
                     waitTime_total = (CIIndex['clone_code_startTime'] -
                                       commit_createTime) + (
@@ -432,6 +453,9 @@ class analysisBuildLog(object):
 
             elif ciName.startswith(self.Paddle_build_parallel_ci):
                 for stage in CIIndex:
+                    if stage == 'isRebuild':
+                        basic_ci_index_dict['isRebuild'] = CIIndex['isRebuild']
+                        continue
                     for job in CIIndex[stage]:
                         if job == '流水线复用插件':
                             pass
@@ -549,6 +573,9 @@ class analysisBuildLog(object):
 
             elif ciName.startswith(self.Paddle_cpu_gpu_separate_ci_tuple):
                 for stage in CIIndex:
+                    if stage == 'isRebuild':
+                        basic_ci_index_dict['isRebuild'] = CIIndex['isRebuild']
+                        continue
                     for job in CIIndex[stage]:
                         if job == 'Git-clone':
                             clone_code_status = CIIndex[stage][job]['status']
@@ -704,6 +731,9 @@ class analysisBuildLog(object):
 
             else:
                 for stage in CIIndex:
+                    if stage == 'isRebuild':
+                        basic_ci_index_dict['isRebuild'] = CIIndex['isRebuild']
+                        continue
                     for job in CIIndex[stage]:
                         if job == 'Git-clone':
                             clone_code_status = CIIndex[stage][job]['status']
