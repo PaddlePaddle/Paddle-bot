@@ -895,7 +895,7 @@ class analysisBuildLog(object):
             'waitTime_total']
         #detailed_ci_index_dict['endTime'] = basic_ci_index['paddle_build_endTime'] if 'paddle_build_endTime' in basic_ci_index else basic_ci_index['docker_build_endTime']
         detailed_ci_index_dict['documentfix'] = basic_ci_index['documentfix']
-
+        detailed_ci_index_dict['isRebuild'] = basic_ci_index['isRebuild']
         analysis_ci_index = self.analyze_failed_cause(
             basic_ci_index)  #分析PR失败原因
         if ciName.startswith(
