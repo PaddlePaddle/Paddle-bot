@@ -58,6 +58,97 @@ async def pull_request_event_ci(event, gh, repo, *args, **kwargs):
             await gh.post(url, data={"body": message})
 
 
+@router.register("pull_request", action="opened")
+@router.register("pull_request", action="closed")
+async def pull_request_label_for_external(event, gh, repo, *args, **kwargs):
+    """Check if PR triggers CI"""
+    today = datetime.date.today()
+    pr_num = event.data['number']
+    url = event.data["pull_request"]["comments_url"]
+    commit_url = event.data["pull_request"]["commits_url"]
+    sha = event.data["pull_request"]["head"]["sha"]
+    base_branch = event.data["pull_request"]['base']['label']
+    user = event.data["sender"]['login']
+    label_url = 'https://api.github.com/repos/%s/issues/%s/labels' % (repo,
+                                                                      pr_num)
+    f = open("buildLog/person_on_job-%s.log" % today)
+    person_on_job = f.read()
+    if user not in person_on_job:
+        if event.data['action'] == 'opened':
+            logger.info("%s_%s create PR Successful." % (user, pr_num))
+            create_labels = ['contributor', 'status: proposed']
+            await gh.post(label_url, data={"labels": create_labels})
+        elif event.data['action'] == 'closed':
+            pr_labels = event.data['pull_request']['labels']
+            delete_label_name_list = []
+            for label_id in pr_labels:
+                name = label_id['name']
+                if name.startswith('status'):
+                    delete_label_name_list.append(name)
+            if len(delete_label_name_list) != 0:
+                for delete_label_name in delete_label_name_list:
+                    logger.info(
+                        "%s_%s remove last status label(%s) successful!" %
+                        (user, pr_num, delete_label_name))
+                    label_delete_url = 'https://api.github.com/repos/%s/issues/%s/labels/%s' % (
+                        repo, pr_num, delete_label_name)
+                    await gh.delete(label_delete_url)
+            ifMerge = event.data["pull_request"]['merged']
+            logger.info("%s_%s merged: %s." % (user, pr_num, ifMerge))
+            if ifMerge == False:
+                close_label = ['status: not progressed']
+                await gh.post(label_url, data={"labels": close_label})
+            else:
+                close_label = ['status: accepted']
+                await gh.post(label_url, data={"labels": close_label})
+    f.close()
+
+
+@router.register("pull_request", action="labeled")
+async def pull_request_label_send_message(event, gh, repo, *args, **kwargs):
+    pr_num = event.data['number']
+    user = event.data["sender"]['login']
+    label = event.data['label']['name']
+    if label in ['status: proposed', 'contributor']:
+        return
+    PR_label_for_external_repos = localConfig.cf.get('FunctionScope',
+                                                     'PR_label_for_external')
+    if repo not in PR_label_for_external_repos:
+        return
+    pr_labels = event.data['pull_request']['labels']
+    delete_label_name_list = []
+    for label_id in pr_labels:
+        name = label_id['name']
+        logger.info('pr_labels name: %s' % name)
+        if name.startswith('status') and name != label:
+            delete_label_name_list.append(name)
+    if len(delete_label_name_list) != 0:
+        for delete_label_name in delete_label_name_list:
+            logger.info("%s_%s remove last status label(%s) successful!" %
+                        (user, pr_num, delete_label_name))
+            label_delete_url = 'https://api.github.com/repos/%s/issues/%s/labels/%s' % (
+                repo, pr_num, delete_label_name)
+            await gh.delete(label_delete_url)
+    if label == 'status: open review':
+        message = localConfig.cf.get(repo, 'PR_LABEL_OPEN_REVIEW')
+    elif label == 'status: revision':
+        message = localConfig.cf.get(repo, 'PR_LABEL_REVISION')
+    elif label == 'status: accepted':
+        message = localConfig.cf.get(repo, 'PR_LABEL_ACCEPT')
+    elif label == 'status: not progressed':
+        message = localConfig.cf.get(repo, 'PR_LABEL_NOT_PROGRESSED')
+    elif label == 'status: testing':
+        message = localConfig.cf.get(repo, 'PR_LABEL_TESTING')
+    elif label == 'status: finished':
+        message = localConfig.cf.get(repo, 'PR_LABEL_FINISHED')
+    else:
+        message = ''
+    if message != '':
+        url = event.data["pull_request"]["comments_url"]
+        logger.info("%s add label %s successful!" % (pr_num, label))
+        await gh.post(url, data={"body": message})
+
+
 @router.register("pull_request", action="synchronize")
 @router.register("pull_request", action="edited")
 @router.register("pull_request", action="opened")

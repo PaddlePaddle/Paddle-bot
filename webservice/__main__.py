@@ -13,12 +13,21 @@ router = routing.Router(event.router)
 
 
 @routes.post("/")
+@routes.post("/icafetogithub/label")
 async def main(request):
     body = await request.read()
-    user = json.loads(body.decode('utf8'))['repository']['owner']['login']
-    repo = json.loads(body.decode('utf8'))['repository']['full_name']
-    secret = os.environ.get("GH_SECRET")
-    event = sansio.Event.from_http(request.headers, body, secret=secret)
+    if 'pr' in json.loads(body.decode('utf8')):
+        PR = json.loads(body.decode('utf8'))['pr']
+        label = json.loads(body.decode('utf8'))['label']
+        repo = json.loads(body.decode('utf8'))['repo']
+        user = repo.split('/')[0]
+        isLabel = True
+    else:
+        user = json.loads(body.decode('utf8'))['repository']['owner']['login']
+        repo = json.loads(body.decode('utf8'))['repository']['full_name']
+        secret = os.environ.get("GH_SECRET")
+        event = sansio.Event.from_http(request.headers, body, secret=secret)
+        isLabel = False
     async with aiohttp.ClientSession() as session:
         app_id = os.getenv("GH_APP_ID")
         jwt = get_jwt(app_id)
@@ -33,8 +42,26 @@ async def main(request):
             # treat access_token as if a personal access token
             gh = gh_aiohttp.GitHubAPI(
                 session, user, oauth_token=access_token["token"])
-            await router.dispatch(event, gh, repo)
+            if isLabel == True:
+                if label == 'testing':
+                    label_github = ['status: testing']
+                elif label == 'finished':
+                    label_github = ['status: finished']
+                label_url = 'https://api.github.com/repos/%s/issues/%s/labels' % (
+                    repo, PR)
+                await gh.post(label_url, data={"labels": label_github})
+            else:
+                await router.dispatch(event, gh, repo)
+
     return web.Response(status=200)
+
+
+routes.get("/")
+
+
+async def main(request):
+    return web.Response(
+        status=200, text="You have successfully installed the Paddle-bot app.")
 
 
 if __name__ == "__main__":
