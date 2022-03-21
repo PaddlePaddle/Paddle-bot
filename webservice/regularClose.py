@@ -41,15 +41,15 @@ def getNextUrl(link):
 
 
 async def overdueList(types, url, gh, CloseDay):
+    """get overdueList"""
     today = datetime.date.today()
     lastYear = str(today - datetime.timedelta(days=CloseDay))
     logger.info("Close %s before %s" % (types, lastYear))
     overduelist = []
     while (url != None):
-        print(url)
         (code, header, body) = await gh._request("GET", url, {
             'accept': 'application/vnd.github.antiope-preview+json',
-            'authorization': "token xxx"
+            'authorization': "token xxxx"
         })
         res = json.loads(body.decode('utf8'))
         for item in res:
@@ -73,8 +73,6 @@ async def overdueList(types, url, gh, CloseDay):
                 if item['updated_at'] < lastYear:  #if updateTime earlier than lastYear
                     overduelist.append(item['number'])
         url = getNextUrl(header['link'])
-        #print(url)
-        #url = None
     return overduelist
 
 
@@ -150,6 +148,16 @@ async def main(user, repo, repoMessage):
 
 def regularClose_job():
     regularClose_repo_dict = {
+        'PaddleDetection': {
+            'CloseDay': 90,
+            'receivers': ['xxx@baidu.com', 'xxxxx@baidu.com'],
+            'CloseType': ['issues']
+        },
+        'PaddleClas': {
+            'CloseDay': 90,
+            'receivers': ['xxx@baidu.com', 'xxxxx@baidu.com'],
+            'CloseType': ['issues']
+        },
         'PaddleOCR': {
             'CloseDay': 90,
             'receivers': ['xxx@baidu.com', 'xxxxx@baidu.com'],
