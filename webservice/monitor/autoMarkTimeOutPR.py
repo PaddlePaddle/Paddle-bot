@@ -15,6 +15,8 @@ from utils.auth import get_jwt, get_installation, get_installation_access_token
 from utils.test_auth_ipipe import xlyOpenApiRequest
 from utils.readConfig import ReadConfig
 
+from utils.auth_ipipe import Get_ipipe_auth
+
 logging.basicConfig(
     level=logging.INFO,
     filename='../logs/regularMark.log',
@@ -63,6 +65,7 @@ class MarkTimeoutCI(object):
         month_Days_ago = str(today - datetime.timedelta(days=30))
         overduelist = []
         while (self.pr_url != None):
+            print(self.pr_url)
             (code, header, body) = await self.gh._request(
                 "GET", self.pr_url,
                 {'accept': 'application/vnd.github.antiope-preview+json'})
@@ -80,6 +83,12 @@ class MarkTimeoutCI(object):
         logger.info("before %s's PRs: %s" % (seven_Days_ago, overduelist))
         return overduelist
 
+    def get_stageUrl(self, target_url):
+        pipelineBuildid = target_url.split('/')[-4]
+        stage_url = localConfig.cf.get('ipipeConf',
+                                       'stage_url') + pipelineBuildid
+        return stage_url
+
     async def getCIstatus(self):
         """
         获取符合条件的PR的CI列表:
@@ -93,12 +102,13 @@ class MarkTimeoutCI(object):
         seven_Days_ago = str(today - datetime.timedelta(days=7))
         CI_STATUS_LIST = []
         for item in PRList:
+            print(item['PR'])
             commit_ci_status = {}
             commit_ci_status['PR'] = item['PR']
             commit_ci_status['commit'] = item['commit']
             status_url = item['status_url']
             res = requests.get(status_url,
-                               headers={'authorization': "token xxx"},
+                               headers={'authorization': "token xxxx"},
                                timeout=15).json()
             commit_ci_status['CI'] = []
             if_before_seven_day = []  #标记是否所有的CI都是7天之前的
@@ -115,17 +125,28 @@ class MarkTimeoutCI(object):
                         item_dic['time'] = ci['created_at']
                         item_dic['ciName'] = ci['context']
                         item_dic['status'] = ci['state']
-                        item_dic['markId'] = ci['target_url'].split('/')[-1]
-                        commit_ci_status['CI'].append(item_dic)
-                        if item_dic['time'] > seven_Days_ago:  #最新的一次CI不是7天之前的
-                            if_before_seven_day.append(False)
+                        stage_url = self.get_stageUrl(ci['target_url'])
+                        session, req = Get_ipipe_auth(stage_url)
+                        try:
+                            response = session.send(req).json()
+                        except Exception as e:
+                            print("Error: %s" % e)
                         else:
-                            if_before_seven_day.append(True)  #True 是7天之前的
+                            item_dic['markId'] = response['pipelineBuildBean'][
+                                'stageBuildBeans'][-1]['jobGroupBuildBeans'][
+                                    -1][-1]['id']
+                            commit_ci_status['CI'].append(item_dic)
+                            if item_dic[
+                                    'time'] > seven_Days_ago:  #最新的一次CI不是7天之前的
+                                if_before_seven_day.append(False)
+                            else:
+                                if_before_seven_day.append(True)  #True 是7天之前的
             if True in if_before_seven_day:  #只要有一个CI是七天之前的就必须标记
                 print('%s is 7 ago..........' % item['PR'])
                 CI_STATUS_LIST.append(commit_ci_status)
             else:
                 print('%s not 7 ago' % item['PR'])
+        print("need to mark ci list: %s" % CI_STATUS_LIST)
         logger.info("need to mark ci list: %s" % CI_STATUS_LIST)
         return CI_STATUS_LIST
 
@@ -134,6 +155,7 @@ class MarkTimeoutCI(object):
         mark success/pending ci to failed
         """
         CIStatusList = await self.getCIstatus()
+        print("CIStatusList length: %s" % len(CIStatusList))
         REQUIRED_CI = localConfig.cf.get('%s/%s' % (self.user, self.repo),
                                          'REQUIRED_CI')
         DATA = {"data": "FAIL", "message": "Paddle-bot", "type": "MARK"}
@@ -154,6 +176,7 @@ class MarkTimeoutCI(object):
                     mark_url = self.mark_url.format(markId)
                     res = xlyOpenApiRequest().post_method(
                         mark_url, json_str, headers=headers)
+
                     if res.status_code == 200 or res.status_code == 201:
                         mark_ci_list.append(ci['ciName'])
                         print('%s_%s_%s mark success!' %
@@ -168,9 +191,8 @@ class MarkTimeoutCI(object):
             if len(mark_ci_list) > 0:
                 marked = self.queryIfHasMark(PR, commit)
                 if marked == False:
-                    self.inform(item)
+                    await self.inform(item)
                 else:
-                    print('%s_%s has marked!!!!' % (PR, commit))
                     logger.info('%s_%s has marked!!!!' % (PR, commit))
                 data = {
                     'TIME': time.strftime("%Y%m%d %H:%M:%S", time.localtime()),
@@ -208,7 +230,9 @@ class MarkTimeoutCI(object):
         rerun_ci_link = self.rerun_url.format(item['PR'], item['commit'])
         comment_url = self.comment_url.format(item['PR'])
         shortId = item['commit'][0:7]
+        #message = "Sorry to inform you that %s's CIs have passed for more than 7 days. To prevent PR conflicts, you need to re-run all CIs. You can re-run it manually, or you can click [`here`](%s) to re-run automatically." %(shortId, rerun_ci_link)
         message = "Sorry to inform you that %s's CIs have passed for more than 7 days. To prevent PR conflicts, you need to re-run all CIs manually. " % shortId
+        print('%s inform!!!' % item['PR'])
         await self.gh.post(comment_url, data={"body": message})
 
 
