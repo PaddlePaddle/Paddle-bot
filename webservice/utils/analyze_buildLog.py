@@ -11,6 +11,7 @@ import os
 import time
 import datetime
 import logging
+from logging import handlers
 import wlist_alarm
 from tornado.httpclient import AsyncHTTPClient
 import json
@@ -18,11 +19,15 @@ import json
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 localConfig = ReadConfig()
 
-logging.basicConfig(
-    level=logging.INFO,
-    filename='./logs/event.log',
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+log_file = "./logs/event.log"
+fh = handlers.RotatingFileHandler(
+    filename=log_file, maxBytes=1500000000, backupCount=10, encoding="utf-8")
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 
 def ifDocumentFix(message):

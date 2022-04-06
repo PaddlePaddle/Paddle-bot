@@ -6,17 +6,21 @@ from utils.db import Database
 from utils.convert import javaTimeTotimeStamp
 import time
 import logging
+from logging import handlers
 import re
 
 router = routing.Router()
 localConfig = ReadConfig()
 
-logging.basicConfig(
-    level=logging.INFO,
-    filename='./logs/event.log',
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
 logger = logging.getLogger(__name__)
+log_file = "./logs/event.log"
+fh = handlers.RotatingFileHandler(
+    filename=log_file, maxBytes=1500000000, backupCount=10, encoding="utf-8")
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 
 async def create_check_run(sha, gh, repo):

@@ -4,6 +4,19 @@ import aiohttp
 from utils.auth_ipipe import Get_ipipe_auth
 from utils.analyze_buildLog import get_stageUrl
 from handler import xlyHandler
+import logging
+from logging import handlers
+
+logger = logging.getLogger(__name__)
+
+log_file = "./logs/event.log"
+fh = handlers.RotatingFileHandler(
+    filename=log_file, maxBytes=1500000000, backupCount=10, encoding="utf-8")
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 
 def checkPRNotCI(commit_url, sha):
