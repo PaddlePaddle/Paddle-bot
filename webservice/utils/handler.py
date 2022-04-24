@@ -124,7 +124,19 @@ class xlyHandler(object):
         res = xlyOpenApiRequest().get_method(
             url, param=query_param, headers=headers)
         return res
-
+    
+    def getCIhistoryRecord(self, ciName):
+        ci_conf_id_map = {
+            "PR-CI-Build-Daily": 21864
+        }
+        if ciName not in ci_conf_id_map:
+            return 
+        pipelineId = ci_conf_id_map[ciName]
+        query_param = '_limit=1&_offset=0&pipelineId=%s' %pipelineId
+        url = "https://xly.bce.baidu.com/open-api/ipipe/rest/v3/pipeline-builds/all?%s" %query_param
+        headers = {"Content-Type": "application/json", "IPIPE-UID": "Paddle-bot"}
+        res = xlyOpenApiRequest().get_method(url, param=query_param, headers=headers)
+        return res
 
 class PRHandler(object):
     """PR/commit处理"""
