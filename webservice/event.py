@@ -12,6 +12,7 @@ import re
 router = routing.Router()
 localConfig = ReadConfig()
 
+
 logger = logging.getLogger(__name__)
 log_file = "./logs/event.log"
 fh = handlers.RotatingFileHandler(
@@ -29,7 +30,6 @@ async def create_check_run(sha, gh, repo):
     url = 'https://api.github.com/repos/%s/check-runs' % repo
     await gh.post(
         url, data=data, accept='application/vnd.github.antiope-preview+json')
-
 
 @router.register("pull_request", action="opened")
 @router.register("pull_request", action="synchronize")
@@ -152,6 +152,51 @@ async def pull_request_label_send_message(event, gh, repo, *args, **kwargs):
         logger.info("%s add label %s successful!" % (pr_num, label))
         await gh.post(url, data={"body": message})
 
+
+@router.register("issues", action="labeled")
+async def issue_label_for_icafe(event, gh, repo, *args, **kwargs):
+    issue_num = event.data['issue']['number']
+    cur_label = event.data['label']['name']
+    issue_status = event.data['issue']['state']
+    if cur_label == 'status/close':
+        data = {"state": "closed"}
+        url = "https://api.github.com/repos/%s/issues/%s" % (repo, issue_num)
+        await gh.patch(url, data=data)
+        logger.info("issues: %s closed success!" % issue_num)
+    if issue_status == 'closed' and cur_label != 'status/close' and cur_label.startswith('status/'):
+        data = {"state": "open"}
+        url = "https://api.github.com/repos/%s/issues/%s" % (repo, issue_num)
+        logger.info("issues url: %s" %url)
+        await gh.patch(url, data=data)
+        logger.info("issues: %s reopen success!" % issue_num)
+    if cur_label.startswith('type/'):
+        remove_label = 'type/'
+    elif cur_label.startswith('status/'):
+        remove_label = 'status/'
+    else:
+        remove_label = ''
+    if remove_label != '':
+        old_labels = event.data['issue']['labels']
+        for l in old_labels:
+            if l['name'].startswith(remove_label) and l['name'] != cur_label:
+                label_delete_url = 'https://api.github.com/repos/%s/issues/%s/labels/%s' %(repo, issue_num, l['name'])
+                await gh.delete(label_delete_url)
+                logger.info("%s remove last status label(%s) successful!" % (issue_num, l['name']))
+
+
+@router.register("issues", action="reopened")
+async def ISSUE_reopen_auto_label(event, gh, repo, *args, **kwargs):
+    """Automatically respond to users"""
+    issue_effect_repos = localConfig.cf.get('FunctionScope', 'ISSUE_open_auto_reply')
+    if repo in issue_effect_repos:
+        issue_num = event.data['issue']['number']
+        sender = event.data["sender"]["login"]
+        if sender != 'paddle-bot[bot]':
+            label_github = ['status/reopen']
+            label_url = 'https://api.github.com/repos/%s/issues/%s/labels' %(repo, issue_num)
+            logger.info("label_url: %s" %label_url)
+            await gh.post(label_url, data={"labels": label_github})
+            logger.info("%s reopen success, and label" %issue_num)
 
 @router.register("pull_request", action="synchronize")
 @router.register("pull_request", action="edited")
@@ -296,21 +341,28 @@ async def issue_event(event, gh, repo, *args, **kwargs):
 @router.register("issues", action="closed")
 async def check_close_regularly(event, gh, repo, *args, **kwargs):
     """check_close_regularly"""
-    issue_effect_repos = localConfig.cf.get('FunctionScope',
-                                            'ISSUE_close_auto_reply')
+    issue_num = event.data["issue"]["number"]
+    issue_effect_repos = localConfig.cf.get('FunctionScope', 'ISSUE_close_auto_reply')
     if repo in issue_effect_repos:
         url = event.data["issue"]["comments_url"]
         sender = event.data["sender"]["login"]
         if sender == 'paddle-bot[bot]':
-            message = localConfig.cf.get(repo, 'CLOSE_REGULAR')
-            await gh.post(url, data={"body": message})
+            old_labels = event.data['issue']['labels']
+            is_icafe_closed = False
+            for l in old_labels:
+                if l['name'] == 'status/close':
+                    is_icafe_closed = True
+            if is_icafe_closed == False:
+                message = localConfig.cf.get(repo, 'CLOSE_REGULAR')
+                await gh.post(url, data={"body": message})
+        
         else:
-            message = "%s\r\n\r\n%s\r\n%s" % (localConfig.cf.get(
-                repo, 'ISSUE_CLOSE'), localConfig.cf.get(
-                    repo, 'CHOOSE_YES'), localConfig.cf.get(repo, 'CHOOSE_NO'))
-            await gh.post(url, data={"body": message})
-
-
+            label_github = ['status/close']
+            label_url = 'https://api.github.com/repos/%s/issues/%s/labels' %(repo, issue_num)
+            logger.info("label_url: %s" %label_url)
+            await gh.post(label_url, data={"labels": label_github})
+            logger.info("%s closed success, and label" %issue_num)
+        
 #PR的CI数据采集
 @router.register("status")
 async def get_ci_index(event, gh, repo, *args, **kwargs):
