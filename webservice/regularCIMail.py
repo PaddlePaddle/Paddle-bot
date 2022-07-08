@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from utils.readConfig import ReadConfig
 from utils.mail import Mail
 from utils.db import Database
@@ -26,8 +27,8 @@ class WeeklyCIIndex():
             'PR-CI-ScienceTest', 'PR-CI-OP-benchmark', 'PR-CI-Model-benchmark',
             'PR-CI-Windows', 'PR-CI-Windows-OPENBLAS',
             'PR-CI-Windows-Inference', 'PR-CI-Static-Check', 'PR-CI-Inference',
-            'PR-CI-infrt', 'PR-CI-Mac-Python3', 'PR-CI-CINN', 'PR-CI-GpuPS',
-            'PR-CI-NPU', 'PR-CI-APPROVAL', 'PR-CI-ROCM-Compile', 'PR-CI-Kunlun'
+            'PR-CI-Mac-Python3', 'PR-CI-CINN', 'PR-CI-GpuPS', 'PR-CI-NPU',
+            'PR-CI-APPROVAL', 'PR-CI-ROCM-Compile', 'PR-CI-Kunlun'
         ]
         self.keyIndexDict_ALL = {
             "00任务90分位耗时(排队+执行)/min": "consum_time_all_commit_time_point_90",
@@ -46,12 +47,20 @@ class WeeklyCIIndex():
             "11平均测试时间/min": "testCaseTime_total_all_commit_mean_time",
             "12平均失败率/%": "failRate_all_commit",
             "13平均rerun率/%": "rerunRate_all_commit",
+
+            #"14任务平均耗时(排队+执行)/min": "consum_time_all_commit_mean_time",
+            #"15任务平均等待时间/min": "wait_time_all_commit_mean_time", #触发前的前一个任务的平均耗时#+自己的等待时间
+            #"16触发前的前一个任务的平均耗时/min": "consum_time_lastjob_all_commit_mean_time", 
+            #"17CPU平均等待时间/min": "cpu_wait_time_all_commit_mean_time",
+            #"15GPU平均等待时间/min": "gpu_wait_time_all_commit_mean_time",
+            #"16任务平均执行时间/min": "exec_time_all_commit_mean_time",
+            #"17CPU平均执行时间/min": "cpu_exec_time_all_commit_mean_time",
+            #"18GPU平均执行时间/min": "gpu_exec_time_all_commit_mean_time",
         }
         self.ciExecTimeLastJob = {
             'PR-CI-Build': 'PR-CI-Py3',
             'PR-CI-Coverage': 'PR-CI-Py3',
             'PR-CI-GpuPS': 'PR-CI-Py3',
-            'PR-CI-infrt': 'PR-CI-Py3',
             'PR-CI-CINN': 'PR-CI-Py3',
             'PR-CI-Static-Check': 'PR-CI-Py3',
             'PR-CE-Framework': 'PR-CI-Build',
@@ -89,7 +98,7 @@ class WeeklyCIIndex():
             "13平均测试时间/min": "testCaseTime_total_mean_time_all_commit",
         }
 
-        self.repo = ['PaddlePaddle/Paddle']
+        self.repo = ['PaddlePaddle/Paddle']  #, 'PaddlePaddle/docs']
 
         self.exCodeDict = {
             '示例代码失败': 5,
@@ -121,6 +130,7 @@ class WeeklyCIIndex():
 
         #时间指标: 所有commit执行时间/所有commit等待时间/耗时/成功commit执行时间/成功commit等待时间/成功commit的耗时
         for ci in self.requiredCIName:
+            print(ci)
             ci_index[ci] = {}
             if ci == 'PR-CI-Windows':
                 queryCIName = 'ciName =~ /^%s/ and ciName !~ /^PR-CI-Windows-OPENBLAS/ and ciName !~ /^PR-CI-Windows-Inference/' % ci
@@ -160,6 +170,9 @@ class WeeklyCIIndex():
                     (float(ci_index[ci]['任务90分位耗时(排队+执行)/min']) +
                      float(ci_index[ci]['触发前的前一个任务的90分位耗时/min'])), 2)
 
+                #ci_index[ci]['任务平均等待时间/min'] = round((float(ci_index[ci]['任务平均等待时间/min']) + float(ci_index[ci]['触发前的前一个任务的平均耗时/min'])), 2)
+                #ci_index[ci]['任务平均耗时(排队+执行)/min'] = round((float(ci_index[ci]['任务平均耗时(排队+执行)/min']) + float(ci_index[ci]['触发前的前一个任务的平均耗时/min'])), 2)
+
             #success-commit 
             for key in sorted(self.keyIndexDict_success):
                 query_key = self.keyIndexDict_success[key]
@@ -187,6 +200,7 @@ class WeeklyCIIndex():
                 queryCIName, startTime_stamp, endTime_stamp)
             all_commitCount = self.db.queryDB(all_commitCount_query_stat,
                                               'count')
+
             ci_index[ci]['rerunRate'] = "%.2f" % (
                 (1 - noRepeat_commitCount / all_commitCount) *
                 100) if all_commitCount != None else 0
@@ -202,7 +216,82 @@ class WeeklyCIIndex():
 
         return ci_index
 
+    def getRerunRatio(self, startTime, endTime):
+        """获取由于单测随机挂引起的rerun率"""
+        startTime_stamp = self.common.strTimeToTimestamp(startTime)
+        endTime_stamp = self.common.strTimeToTimestamp(endTime)
+        rerun_index = {}
+        all_testfailed_rerunRatio = 0.0
+        for ci in self.ciNameHasTests:
+            print("ci: %s" % ci)
+            rerunCount = {}
+            count = 0
+            if ci == 'PR-CI-Mac':
+                ALL_commitCount_query_stat = "SELECT COUNT(commitId) from paddle_ci_status where ciName =~ /^%s/ and ciName !~ /^PR-CI-Mac-Python3/ and commit_createTime > %s and commit_createTime < %s" % (
+                    ci, startTime_stamp, endTime_stamp)
+            elif ci == 'PR-CI-Windows':
+                ALL_commitCount_query_stat = "SELECT COUNT(commitId) from paddle_ci_status where ciName =~ /^%s/ and ciName !~ /^PR-CI-Windows-OPENBLAS/ and ciName !~ /^PR-CI-Windows-Inference/ and commit_createTime > %s and commit_createTime < %s" % (
+                    ci, startTime_stamp, endTime_stamp)
+            elif ci == 'PR-CI-Coverage':
+                ALL_commitCount_query_stat = "SELECT COUNT(commitId) from paddle_ci_status where ciName =~ /^%s/ and ciName !~ /^PR-CI-Coverage-compile-Daily/ and ciName !~ /^PR-CI-Coverage-Eager-Test/ and commit_createTime > %s and commit_createTime < %s" % (
+                    ci, startTime_stamp, endTime_stamp)
+            else:
+                ALL_commitCount_query_stat = "SELECT COUNT(commitId) from paddle_ci_status where ciName =~ /^%s/ and commit_createTime > %s and commit_createTime < %s" % (
+                    ci, startTime_stamp, endTime_stamp)
+            ALL_commitCount = self.db.queryDB(ALL_commitCount_query_stat,
+                                              'count')
+
+            if ci == 'PR-CI-Mac':
+                query_stat = "SELECT commitId from paddle_ci_status where ciName =~ /^%s/ and ciName !~ /^PR-CI-Mac-Python3/ and status='failure' and EXCODE=8 and commit_createTime > %s and commit_createTime < %s " % (
+                    ci, startTime_stamp, endTime_stamp)
+            elif ci == 'PR-CI-Windows':
+                query_stat = "SELECT commitId from paddle_ci_status where ciName =~ /^%s/ and ciName !~ /^PR-CI-Windows-OPENBLAS/ and ciName !~ /^PR-CI-Windows-Inference/ and status='failure' and EXCODE=8 and commit_createTime > %s and commit_createTime < %s " % (
+                    ci, startTime_stamp, endTime_stamp)
+            elif ci == 'PR-CI-Coverage':
+                query_stat = "SELECT commitId from paddle_ci_status where ciName =~ /^%s/ and ciName !~ /^PR-CI-Coverage-compile-Daily/ and ciName !~ /^PR-CI-Coverage-Eager-Test/ and status='failure' and EXCODE=8 and commit_createTime > %s and commit_createTime < %s " % (
+                    ci, startTime_stamp, endTime_stamp)
+            else:
+                query_stat = "SELECT commitId from paddle_ci_status where ciName =~ /^%s/ and status='failure' and EXCODE=8 and commit_createTime > %s and commit_createTime < %s" % (
+                    ci, startTime_stamp, endTime_stamp)
+            query_stat = "SELECT commitId,PR from paddle_ci_status where ciName='%s' and status='failure' and EXCODE=8 and commit_createTime > %s and commit_createTime < %s and time > '2020-07-13 14:20:00'" % (
+                ci, startTime_stamp, endTime_stamp)
+            print(query_stat)
+            result = list(self.db.query(query_stat))
+            if len(result) == 0:
+                rerun_index['%s_testfailed_rerunRatio' % ci] = 0
+            else:
+                for key in result[0]:
+                    print(key)
+                    commitId = key['commitId']
+                    #PR = key['PR']
+                    '''
+                    if '%s_%s' %(PR, commitId) not in rerunCount:
+                        rerunCount['%s_%s' %(PR, commitId)] = 1
+                    else:
+                        value = rerunCount['%s_%s' %(PR, commitId)]
+                        value += 1
+                        rerunCount['%s_%s' %(PR, commitId)] = value
+                    '''
+                    if commitId not in rerunCount:
+                        rerunCount[commitId] = 1
+                    else:
+                        value = rerunCount[commitId]
+                        value += 1
+                        rerunCount[commitId] = value
+            for commitId in rerunCount:
+                if rerunCount[commitId] > 1:
+                    #print("%s: %s" %(commitId, rerunCount[commitId]))
+                    count += (rerunCount[commitId] - 1)
+            rerun_index['%s_testfailed_rerunRatio' % ci] = '%.2f' % (
+                count / ALL_commitCount * 100)
+            all_testfailed_rerunRatio += float(rerun_index[
+                '%s_testfailed_rerunRatio' % ci])
+        rerun_index[
+            'all_testfailed_rerunRatio'] = '%.2f' % all_testfailed_rerunRatio
+        return rerun_index
+
     def getRerunData(self, startTime, endTime):
+        """分析rerun原因"""
         rerunMessage_dict = {}
         startTime_stamp = self.common.strTimeToTimestamp(startTime)
         endTime_stamp = self.common.strTimeToTimestamp(endTime)
@@ -210,6 +299,8 @@ class WeeklyCIIndex():
             rerunMessage_dict[ci] = {}
             if ci == 'PR-CI-Windows':
                 queryCIName = 'ciName =~ /^%s/ and ciName !~ /^PR-CI-Windows-OPENBLAS/ and ciName !~ /^PR-CI-Windows-Inference/' % ci
+            elif ci == 'PR-CI-Coverage':
+                queryCIName = 'ciName =~ /^%s/ and ciName !~ /^PR-CI-Coverage-compile-Daily/ and ciName !~ /^PR-CI-Coverage-Eager-Test/' % ci
             else:
                 queryCIName = 'ciName =~ /^%s/' % ci
 
@@ -319,6 +410,7 @@ class WeeklyCIIndex():
         thisweek_max_consumtime_all_commit = 0
         lastweek_max_consumtime_all_commit = 0
         for ci in self.requiredCIName:
+            print("ci:%s" % ci)
             thisweek_max_consumtime_ci_all_commit = float(ciIndex_thisWeek[ci][
                 '任务90分位耗时(排队+执行)/min']) if ciIndex_thisWeek[ci][
                     '任务90分位耗时(排队+执行)/min'] != None else 0
@@ -445,6 +537,52 @@ class WeeklyCIIndex():
         KeyIndexContent += "</tr></table>"
         return KeyIndexContent
 
+    def getInternalDetailIndex(self, ciIndex_thisWeek, ciIndex_lastWeek=None):
+        """获取内部本周详细指标"""
+        InternalDetailIndexContent = "<table border='1' align=center> <caption><font size='3'><b>对内详细指标</b></font></caption>"
+        ci_index_dic = {
+            "00CPU平均等待时间/min": "cpu_wait_time_all_commit", "01CPU平均执行时间/min": "cpu_exec_time_all_commit",
+            "02GPU平均等待时间/min": "gpu_wait_time_all_commit", "03GPU平均执行时间/min": "gpu_exec_time_all_commit",
+            "04平均执行时间/min": "exec_time_all_commit",  "05平均排队时间/min": "wait_time_all_commit",
+            "06平均耗时（排队+执行）/min": "consum_time_all_commit",
+            "07平均编译时间/min": "buildTime_all_commit", "08平均ccache命中率/%": "ccacheRate",
+            "09平均单测时间/min": "testCaseTime_total_all_commit", "10单卡case平均执行时间/min": "testCaseTime_single",\
+            "11多卡case平均执行时间/min": "testCaseTime_multi", "12独占case平均执行时间/min": "testCaseTime_exclusive",
+            "13case总数/个": "testCaseCount_total", "14单卡case总数/个": "testCaseCount_single",
+            "15多卡case总数/个": "testCaseCount_multi", "16独占case总数/个": "testCaseCount_exclusive",
+            "17平均whl大小/M": "WhlSize", "18平均build目录大小/G": "buildSize",
+            "19平均rerun率": "rerunRate", "20平均失败率": "failRate",
+            "21平均预测库大小/M": "fluidInferenceSize", "22平均测试预测库时间/min": "testFluidLibTime",
+            "23平均测试训练库时间/min": "testFluidLibTrainTime",
+            "24成功任务的CPU平均等待时间/min": "cpu_wait_time_success_commit", "25成功任务的CPU平均执行时间/min": "cpu_exec_time_success_commit",
+            "26成功任务的GPU平均等待时间/min": "gpu_wait_time_all_commit", "27成功任务的GPU平均执行时间/min": "gpu_exec_time_all_commit",
+            "28成功任务的平均等待时间/min": "wait_time_success_commit", "29成功任务的平均执行时间/min": "exec_time_success_commit",
+            "30成功任务的平均耗时（排队+执行）/min": "consum_time_success_commit", "31成功任务的平均编译时间/min": "buildTime_success_commit",
+            "32成功任务的平均单测时间/min": "testCaseTime_total_success_commit"}
+
+        ci_index_key_list = sorted(ci_index_dic.keys())
+        InternalDetailIndexContent += "<tr align=center><td bgcolor='#d0d0d0'>CI名称</td>"
+        for ci in self.requiredCIName:
+            InternalDetailIndexContent += "<td>{}</td>".format(ci)
+        InternalDetailIndexContent += "</tr>"
+        THISWEEK_CI_INDEX_INFO = ""
+        for i in range(len(ci_index_dic)):
+            key = ci_index_key_list[i][2:]
+            #print(key)
+            InternalDetailIndexContent += "<tr align=center><td bgcolor='#d0d0d0'>{}</td>".format(
+                key)
+            for ci_name in self.requiredCIName:
+                key = ci_index_dic[ci_index_key_list[i]]
+                if key not in ciIndex_thisWeek[ci_name]:
+                    InternalDetailIndexContent += "<td>{}</td>".format('-')
+                else:
+                    value = ciIndex_thisWeek[ci_name][key]
+                    value = '-' if value == None else value
+                    InternalDetailIndexContent += "<td>{}</td>".format(value)
+            InternalDetailIndexContent += "</tr>"
+        print(InternalDetailIndexContent)
+        return InternalDetailIndexContent
+
     def getExcodeIndex(self, startTime, endTime):
         """失败原因分析"""
         startTime_stamp = self.common.strTimeToTimestamp(startTime)
@@ -528,7 +666,7 @@ class WeeklyCIIndex():
 def sendMail(startTime, endTime, Content):
     mail = Mail()
     mail.set_sender('xxx@baidu.com')
-    mail.set_receivers(['xx@baidu.com', 'xx@baidu.com', 'xx@baidu.com'])
+    mail.set_receivers(['xxxx@baidu.com'])
     mail.set_title('%s~%s Paddle CI评价指标统计' % (startTime, endTime))
     mail.set_message(Content, messageType='html', encoding='gb2312')
     mail.send()
@@ -557,10 +695,13 @@ def main():
     before_14Days = zeroToday - datetime.timedelta(days=15)
 
     WeeklyCI = WeeklyCIIndex()
+
     ciIndex_thisWeek = WeeklyCI.getWeeklyCIIndex(
         str(before_7Days), str(before_1Days))
+    #print("ciIndex_thisWeek: %s" %ciIndex_thisWeek)
     ciIndex_lastWeek = WeeklyCI.getWeeklyCIIndex(
         str(before_14Days), str(before_7Days))
+    #print("ciIndex_lastWeek: %s" %ciIndex_lastWeek)
 
     UserPerceptionIndexContent = WeeklyCI.getUserPerceptionIndexAndRerunByTestsFailed(
         ciIndex_thisWeek, ciIndex_lastWeek)
@@ -579,6 +720,8 @@ def main():
     MailContent += InternalKeyIndexContent
     MailContent += rerunContent
     MailContent += exCodeContent
+    print('MailContent')
+    print(MailContent)
 
     sendMail(before_7Days, before_1Days, MailContent)
 

@@ -3,19 +3,11 @@
 import requests
 import time
 import json
-import logging
+import re
 import sys
 sys.path.append("..")
-from utils.test_auth_ipipe import xlyOpenApiRequest
+from utils.auth_ipipe import xlyOpenApiRequest
 from utils.readConfig import ReadConfig
-
-logging.basicConfig(
-    level=logging.INFO,
-    filename='../logs/event.log',
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-localConfig = ReadConfig('../conf/config.ini')
 
 
 class xlyHandler(object):
@@ -31,6 +23,7 @@ class xlyHandler(object):
             all_task_list(list): all task list
         """
         url = 'https://xly.bce.baidu.com/open-api/ipipe/rest/v1/paddle-api/status?key=%s' % jobStatus
+        print(url)
         param = 'key=%s' % jobStatus
         headers = {
             "Content-Type": "application/json",
@@ -40,14 +33,13 @@ class xlyHandler(object):
         response = xlyOpenApiRequest().get_method(
             url, param, headers=headers).json()
         end = int(time.time())
-        print('end-start: %s' % (end - start))
-        print(response)
         return response
 
     def getStageMessge(self, targetId):
         """
         获取任务的stage 信息
         """
+        localConfig = ReadConfig('../conf/config.ini')
         url = localConfig.cf.get('ipipeConf', 'stage_url') + str(targetId)
         headers = {
             "Content-Type": "application/json",
@@ -57,8 +49,6 @@ class xlyHandler(object):
         if response.status_code == 200 or response.status_code == 201:
             return response.json()
         else:
-            logger.error("url: %s" % url)
-            logger.error("response: %s  %s" % (response, response.text))
             return None
 
     def getJobLog(self, filename, logUrl):
@@ -124,19 +114,38 @@ class xlyHandler(object):
         res = xlyOpenApiRequest().get_method(
             url, param=query_param, headers=headers)
         return res
-    
+
+    def getCIindex(self, jobid):
+        query_param = 'jobBuildId=%s' % jobid
+        url = "https://xly.bce.baidu.com/open-api/ipipe/rest/v1/paddle-api/job-params?%s" % query_param
+        print(url)
+        headers = {
+            "Content-Type": "application/json",
+            "IPIPE-UID": "Paddle-bot"
+        }
+        res = xlyOpenApiRequest().get_method(
+            url, param=query_param, headers=headers)
+        print(res.text)
+        return res
+
     def getCIhistoryRecord(self, ciName):
         ci_conf_id_map = {
-            "PR-CI-Build-Daily": 21864
+            "PR-CI-Build-Daily": 21864,
+            "PR-CI-Coverage-compile-Daily": 22678
         }
         if ciName not in ci_conf_id_map:
-            return 
+            return
         pipelineId = ci_conf_id_map[ciName]
-        query_param = '_limit=1&_offset=0&pipelineId=%s' %pipelineId
-        url = "https://xly.bce.baidu.com/open-api/ipipe/rest/v3/pipeline-builds/all?%s" %query_param
-        headers = {"Content-Type": "application/json", "IPIPE-UID": "Paddle-bot"}
-        res = xlyOpenApiRequest().get_method(url, param=query_param, headers=headers)
+        query_param = '_limit=5&_offset=0&pipelineId=%s' % pipelineId
+        url = "https://xly.bce.baidu.com/open-api/ipipe/rest/v3/pipeline-builds/all?%s" % query_param
+        headers = {
+            "Content-Type": "application/json",
+            "IPIPE-UID": "Paddle-bot"
+        }
+        res = xlyOpenApiRequest().get_method(
+            url, param=query_param, headers=headers)
         return res
+
 
 class PRHandler(object):
     """PR/commit处理"""
@@ -145,7 +154,7 @@ class PRHandler(object):
         """通过commitId 判断是否指修改文档"""
         ifDocument = False
         url = 'https://api.github.com/repos/%s/commits/%s' % (repo, commit)
-        headers = {'Authorization': "token xx"}
+        headers = {'Authorization': "token xxx"}
         try:
             response = requests.get(url, headers=headers).json()
         except requests.exceptions.ConnectionError:
@@ -166,7 +175,7 @@ class PRHandler(object):
         """判断commit是否修改dockerfile"""
         ifdockerfile = False
         url = 'https://api.github.com/repos/%s/commits/%s' % (repo, commit)
-        headers = {'Authorization': "token xx"}
+        headers = {'Authorization': "token xxx"}
         try:
             response = requests.get(url, headers=headers).json()
         except requests.exceptions.ConnectionError:

@@ -52,7 +52,7 @@ class xlyOpenApiRequest(xlyAuthorization):
         req = requests.Request("GET", url, headers=headers).prepare()
         sign = self.set_sign(param)
         req.headers.update({'Authorization': sign})
-        res = self.session.send(req, timeout=15)
+        res = self.session.send(req, timeout=30)
         return res
 
     def post_method(self,
@@ -65,7 +65,48 @@ class xlyOpenApiRequest(xlyAuthorization):
         """
         req = requests.Request(
             "POST", url, data=data, headers=headers).prepare()
-        sign = self.set_sign(self.param)
+        sign = self.set_sign(param)
         req.headers.update({'Authorization': sign})
         res = self.session.send(req, timeout=15)
         return res
+
+
+def encrypt(pub, original_text):  # 用公钥加密
+    pub = rsa.PublicKey.load_pkcs1_openssl_pem(pub)
+    crypt_text = rsa.encrypt(bytes(original_text.encode('utf-8')), pub)
+    return crypt_text  # 加密后的密文
+
+
+def query_2_md5(query_param):
+    m = hashlib.md5()
+    m.update(bytes(query_param.encode('utf-8')))
+    dig = m.hexdigest()
+    return dig
+
+
+def Sign(query_param):
+    dig = query_2_md5(query_param)
+    auth_string = encrypt(serect, dig)
+    cipher_text = base64.b64encode(auth_string)
+    cipher_str = str(cipher_text, encoding="utf-8")
+    sign = "%s %s" % (access_id, cipher_str)
+    return sign
+
+
+def Get_ipipe_auth(url, query_param=''):
+    session = requests.Session()
+    req = requests.Request(
+        "GET", url, headers={"Content-Type": "application/json"}).prepare()
+    sign = Sign(query_param)
+    req.headers.update({'Authorization': sign})
+    return session, req
+
+
+def Post_ipipe_auth(url, data, query_param=''):
+    session = requests.Session()
+    req = requests.Request(
+        "POST", url, data=data,
+        headers={"Content-Type": "application/json"}).prepare()
+    sign = Sign(query_param)
+    req.headers.update({'Authorization': sign})
+    return session, req
