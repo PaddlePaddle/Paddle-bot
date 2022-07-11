@@ -1204,10 +1204,9 @@ class analysisBuildLog(object):
             data = f.read()
             if index_dict['ciName'].startswith('PR-CI-Windows') and index_dict[
                     'ciName'] != 'PR-CI-Windows-Remain-BuildTest':  #Mac/Windows
-                testsfailed_strlist = data.split('The following tests FAILED:',
-                                                 1)
+                testsfailed_strlist = data.split('Summary Failed Tests...', 1)
                 testsfailed = testsfailed_strlist[1].split(
-                    'Errors while running CTest')[0]
+                    'The following tests FAILED:')[1].split('(python_venv)')[0]
             else:
                 testsfailed_strlist = data.split('Summary Failed Tests...', 1)
                 testsfailed = testsfailed_strlist[1].split(
