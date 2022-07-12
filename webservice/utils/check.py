@@ -1,11 +1,11 @@
 import requests
 import re
-import aiohttp
-from utils.auth_ipipe import Get_ipipe_auth
-from utils.analyze_buildLog import get_stageUrl
-from handler import xlyHandler
 import logging
 from logging import handlers
+import aiohttp
+from utils.auth_ipipe import xlyOpenApiRequest
+from utils.analyze_buildLog import get_stageUrl
+from utils.handler import xlyHandler
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,12 @@ def checkPRNotCI(commit_url, sha):
             if 'notest' in reponse[i]['commit']['message']:
                 res = True
     return res
+
+
+def checkComments(url):
+    headers = {'Authorization': "token xxxx"}
+    response = requests.get(url, headers=headers).json()
+    return response
 
 
 def re_rule(body, CHECK_TEMPLATE):
@@ -85,28 +91,25 @@ def checkPRTemplate(repo, body, CHECK_TEMPLATE):
         res: True or False
     """
     res = False
-    note = r'<!-- Demo: https://github.com/PaddlePaddle/Paddle/pull/24810 -->\r\n|<!-- One of \[ New features \| Bug fixes \| Function optimization \| Performance optimization \| Breaking changes \| Others \] -->|<!-- One of\t\[ OPs \| APIs \| Docs \| Others \] -->|<!-- Describe what this PR does -->'
+    note = r'<!-- Demo: https://github.com/PaddlePaddle/Paddle/pull/24810 -->\r\n|<!-- One of \[ New features \| Bug fixes \| Function optimization \| Performance optimization \| Breaking changes \| Others \] -->|<!-- One of \[ OPs \| APIs \| Docs \| Others \] -->|<!-- Describe what this PR does -->'
+    if body == None:
+        body = ''
     body = re.sub(note, "", body)
     result = re_rule(body, CHECK_TEMPLATE)
     message = ''
     if len(CHECK_TEMPLATE) == 0 and len(body) == 0:
         res = False
     elif result != None:
-        if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
+        if repo in ['PaddlePaddle/Paddle']:
             message = parameter_accuracy(body)
             res = True if message == '' else False
         else:
             res = True
     elif result == None:
         res = False
-        if repo in ['lelelelelez/leetcode', 'PaddlePaddle/Paddle']:
+        if repo in ['PaddlePaddle/Paddle']:
             message = parameter_accuracy(body)
     return res, message
-
-
-def checkComments(url):
-    response = requests.get(url).json()
-    return response
 
 
 def checkRequired(ci_list, required_ci_list):
@@ -119,7 +122,8 @@ def checkRequired(ci_list, required_ci_list):
 
 
 async def checkCIState(combined_statuses_url, required_ci_list):
-    async with aiohttp.ClientSession() as session:
+    headers = {'Authorization': "token xxxx"}
+    async with aiohttp.ClientSession(headers=headers) as session:
         async with session.get(combined_statuses_url) as resp:
             response = await resp.json()
             combined_ci_status = response['state']
@@ -128,14 +132,16 @@ async def checkCIState(combined_statuses_url, required_ci_list):
     return combined_ci_status, required_all_passed
 
 
-def getPRnum(url):
-    response = requests.get(url).json()
+def getPRNum(url):
+    headers = {'Authorization': "token xxx"}
+    response = requests.get(url, headers=headers).json()
     pr_num = response['items'][0]['number']
     return pr_num
 
 
 def getCommitComments(url):
-    response = requests.get(url).json()
+    headers = {'Authorization': "token xxx"}
+    response = requests.get(url, headers=headers).json()
     commits_comments_list = []
     for i in range(len(response)):
         commit_comments_url = response[i]['url'] + "/comments"
@@ -148,7 +154,7 @@ def ifCancelXly(target_url):
     ifCancel = False
     if target_url.startswith('https://xly.bce.baidu.com'):
         stage_url = get_stageUrl(target_url)
-        session, req = Get_ipipe_auth(stage_url)
+        session, req = xlyOpenApiRequest().get_method(stage_url)
         try:
             res = session.send(req).json()
         except Exception as e:
@@ -167,7 +173,7 @@ class xlyJob(xlyHandler):
     def MarkByPaddleBot(self, target_url):
         """是否为机器人标记job的状态"""
         mark_ci_by_bot = False
-        targetId = target_url.split('/')[-3]
+        targetId = target_url.split('/')[-4]
         res = self.getStageMessge(targetId)
         jobGroupBuildBeans = res['pipelineBuildBean']['stageBuildBeans'][0][
             'jobGroupBuildBeans'][0]
@@ -188,7 +194,7 @@ class xlyJob(xlyHandler):
         2. 重提commit, 前面的commit任务也会被自动取消
         """
         cancel_job = False
-        targetId = target_url.split('/')[-3]
+        targetId = target_url.split('/')[-4]
         res = self.getStageMessge(targetId)
         status = res['pipelineBuildBean']['pipelineStatusFromStages']
         if status == 'CANCEL':

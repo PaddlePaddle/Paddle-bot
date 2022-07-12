@@ -30,7 +30,8 @@ async def main(request):
         isLabel = False
     async with aiohttp.ClientSession() as session:
         app_id = os.getenv("GH_APP_ID")
-        jwt = get_jwt(app_id)
+        path_to_private_key = "xxx"
+        jwt = get_jwt(path_to_private_key, app_id)
         gh = gh_aiohttp.GitHubAPI(session, user)
         try:
             installation = await get_installation(gh, jwt, user)
@@ -56,9 +57,7 @@ async def main(request):
     return web.Response(status=200)
 
 
-routes.get("/")
-
-
+@routes.get("/")
 async def main(request):
     return web.Response(
         status=200, text="You have successfully installed the Paddle-bot app.")
@@ -67,7 +66,8 @@ async def main(request):
 if __name__ == "__main__":
     app = web.Application()
     app.add_routes(routes)
-    port = os.environ.get("PORT")
+    #port = os.environ.get("PORT")
+    port = 8003
     if port is not None:
         port = int(port)
     web.run_app(app, port=port)
