@@ -15,6 +15,7 @@ import datetime
 import os
 router = routing.Router()
 localConfig = ReadConfig()
+a=12
 
 logger = logging.getLogger(__name__)
 
