@@ -1,8 +1,8 @@
 aiohttp==3.6.2
 gidgethub==4.1.0
 requests==2.23.0
-jwt==1.5.3
-apscheduler=3.6.3
+jwt
+apscheduler==3.6.3
 influxdb==5.3.0
-pandas==4.8.3
+pandas
 rsa==4.2
