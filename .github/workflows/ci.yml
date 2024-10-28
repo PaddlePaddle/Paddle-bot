@@ -12,9 +12,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    outputs:
-      label-type: CPU
+    runs-on: [CPU]
 
     steps:
     - uses: actions/checkout@v4
