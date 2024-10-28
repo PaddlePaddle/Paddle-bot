@@ -12,8 +12,9 @@ permissions:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    outputs:
+      label-type: CPU
 
     steps:
     - uses: actions/checkout@v4
@@ -26,3 +27,4 @@ jobs:
         python --version
         pwd
         ls
+        sleep 30m
