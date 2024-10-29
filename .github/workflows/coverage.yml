@@ -1,34 +1,16 @@
 name: Coverage
- 
+
 on:
   pull_request:
     branches: [ "master" ]
- 
+
 jobs:
   test:
     runs-on: [ CPU ]
     steps:
-    - uses: actions/checkout@v4
- 
-    - name: Use Node.js 14.0
-      uses: actions/setup-node@v2
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v2
       with:
-        node-version: 14.0
- 
-    - name: Install dependencies
-      run: npm install
- 
-    - name: Run tests
-      run: npm test
- 
-    - name: Setup code-coverage build
-      run: |
-        cat <package.json matching script>
-    - name: Generate coverage report
-      run: npm run code-coverage
- 
-    - name: Upload coverage report
-      uses: actions/upload-artifact@v2
-      with:
-        name: code-coverage-report
-        path: ./coverage/
+        file: ./coverage/index.html
+        run: npm run code-coverage
+
