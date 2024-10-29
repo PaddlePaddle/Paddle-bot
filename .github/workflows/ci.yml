@@ -16,14 +16,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.10
+    - name: Set up Ubuntu24.04
       uses: actions/setup-python@v3
       with:
-        python-version: "3.10"
+        docker-image:: "ubuntu:latest"
     - name: Install dependencies
       run: |
         python --version
         pwd
         ls
         hostname
-        sleep 20m
+        cat /etc/lsb-release
