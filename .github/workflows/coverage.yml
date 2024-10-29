@@ -11,6 +11,9 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v2
       with:
-        file: ./coverage/index.html
-        run: npm run code-coverage
+        file: ./index.html
+        run: 
+          wget -q https://xly.bce.baidu.com/ipipe/ipipe-report/report/27877949/c++-coverage/tensorrt/index.html
+          ls
+          npm run code-coverage
 
