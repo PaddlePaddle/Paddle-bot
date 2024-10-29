@@ -25,4 +25,5 @@ jobs:
         python --version
         pwd
         ls
-        sleep 30m
+        hostname
+        sleep 20m
