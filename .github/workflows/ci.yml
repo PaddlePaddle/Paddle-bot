@@ -5,7 +5,7 @@ name: Clone
 
 on:
   pull_request:
-    branches: [ "develop" ]
+    branches: [ "master" ]
 
 permissions:
   contents: read
