@@ -42,6 +42,6 @@ jobs:
         SK: ${{ secrets.SK }}
       run: |
         cd $WORK
-        tar -zcf Paddle-action.tar.gz Paddle
+        tar -zcf Paddle-action.tar.gz Paddle-bot
         python -m pip install bce-python-sdk==0.8.74
         python bos_upload.py Paddle-action.tar.gz xly-devops/PR/Paddle/${PR_ID}/${COMMIT_ID}
