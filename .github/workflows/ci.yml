@@ -18,7 +18,7 @@ jobs:
     env:
       PR_ID: ${{ github.event.pull_request.number }}
       COMMIT_ID: ${{ github.event.pull_request.head.sha }}
-      BRANCH: develop
+      BRANCH: master
     steps:
     - name: Clone paddle
       uses: actions/checkout@v4
@@ -26,10 +26,6 @@ jobs:
         submodules: 'recursive'
         fetch-depth: 1000
         
-    - name: Merge PR to test branch
-      run: |
-        git fetch origin pull/${PR_ID}/merge
-        git checkout -b test FETCH_HEAD
 
     - name: Download bos client
       env:
